@@ -1,6 +1,5 @@
 import java.io.*;
 import java.net.Socket;
-import java.nio.charset.StandardCharsets;
 import java.util.Scanner;
 
 /**
@@ -9,13 +8,23 @@ import java.util.Scanner;
  *
  * @author Ethan Coulthurst
  * @author Antonio Arant
+ * @version 1
  */
 public class Node {
     private int casID;
     private int nodeID;
     private Socket socket;
     private int outgoingACK = 0;
+    private DataOutputStream out;
+    private DataInputStream in;
+    private int readerWaitFlag;
 
+    /**
+     * Creates a node with given AS and Node IDs and connects it to the network.
+     * Also creates 2 threads with NodeListener object to call receive and transmit methods.
+     * @param casID Arm Switch ID
+     * @param nodeID Node ID
+     */
     public Node(int casID, int nodeID) {
         this.casID = casID;
         this.nodeID = nodeID;
@@ -31,83 +40,87 @@ public class Node {
         new Thread(new NodeListener(NodeListener.ListenerType.TRANSMITTER, this)).start();
     }
 
+    /**
+     * Listens for messages received by socket. Called automatically on separate thread.
+     * @throws IOException if there is a stream read or file write error.
+     */
     public void receive() throws IOException {
-        DataInputStream in = new DataInputStream(socket.getInputStream());
-        File outputFile = new File("node" + this.casID + "_" + this.nodeID + "output.txt");
-        //TODO Open output file and write received lines to it
+        in = new DataInputStream(socket.getInputStream());
+        String outputFilePath = "node" + this.casID + "_" + this.nodeID + "output.txt";
+        new File(outputFilePath).createNewFile();
+        FileWriter writer = new FileWriter(outputFilePath);
+
+        //TODO Add close flag (hijack ACK field) and exit loop
+        while (true) {
+            if (in.available() > 0) {
+                byte[] buffer = new byte[1024];
+                in.read(buffer);
+                Frame frame = Frame.decode(buffer);
+
+                String src = frame.getCasSrc() + "_" + frame.getNodeSrc();
+
+                //If CRC is wrong, ask for retransmission
+                if (!frame.isCrcVerified()) {
+                    Frame ackFrame = new Frame(this.casID, this.nodeID, 1, src + ":");
+                    byte[] bytes = Frame.encode(ackFrame);
+                    out.write(bytes);
+                    continue;
+                }
+
+                //Check if frame is an ACK response (or ACK type value that we've hijacked)
+                if (frame.getSize() == 0) {
+                    switch (frame.getAck()) {
+                        case 1:
+                            setReaderWaitFlag(2);
+                            break;
+                        case 2:
+                        case 3:
+                            setReaderWaitFlag(1);
+                            break;
+                        default:
+                            System.out.println("Node " + this.casID + "_" + this.nodeID + ": Invalid ACK response received");
+                    }
+                } else {
+                    //Otherwise, normal frame, write to file and send positive ACK
+                    writer.write(frame.getData());
+
+                    Frame ackFrame = new Frame(this.casID, this.nodeID, 3, src + ":");
+                    byte[] bytes = Frame.encode(ackFrame);
+                    out.write(bytes);
+                }
+            }
+        }
     }
 
+    /**
+     * Transmits data from input file to socket and waits for acknowledgement from destination before sending next frame
+     * @throws IOException if there is a stream write or file read error.
+     */
     public void transmit() throws IOException {
-        DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+        out = new DataOutputStream(socket.getOutputStream());
         Scanner fileReader = new Scanner(new File("node" + this.casID + "_" + this.nodeID + ".txt"));
 
         while (fileReader.hasNextLine()) {
-            byte[] frame = encode(fileReader.nextLine(), 0);
-            out.write(frame);
-            //TODO Make this function wait for ACK or send again
+            Frame frame = new Frame(this.casID, this.nodeID, 0, fileReader.nextLine());
+
+            //Send message, wait for ACK, if retransmit (wait flag set to 2), then repeat
+            //bytes are re-encoded in case CRC error is on this end
+            do {
+                byte[] bytes = Frame.encode(frame);
+                out.write(bytes);
+                setReaderWaitFlag(0);
+                while (this.readerWaitFlag == 0);
+            } while (this.readerWaitFlag == 2);
         }
     }
 
-    private byte[] encode(String data, int ack) {
-        byte[] frame = new byte[5 + data.length()];
-        String[] dataElements = data.split(":");
-
-        //Destination
-        String[] destElements = dataElements[0].split("_");
-        int casDest = Integer.parseInt(destElements[0]);
-        int nodeDest = Integer.parseInt(destElements[1]);
-        frame[0] = (byte) ((casDest << 4) | nodeDest);
-
-        //Source
-        frame[1] = (byte) ((this.casID << 4) | this.nodeID);
-
-        //Size
-        frame[3] = (byte) dataElements[1].length();
-
-        //Data
-        byte[] message = dataElements[1].getBytes();
-        int i = 5;
-        for (byte b : message) {
-            frame[i++] = b;
-        }
-
-        //ACK Type
-        frame[4] = (byte) ack;
-
-        //CRC - MUST BE LAST
-        byte crc = 0;
-        for (byte b : frame) {
-            //technically this should work cause at this point the crc bit (frame[2]) is 0
-            crc += b;
-        }
-        frame[2] = crc;
-
-        return frame;
-    }
-
-    private String decode(byte[] frame) {
-        //Verify CRC
-        byte crc = (byte) (frame[0] + frame[1]);
-        for (int i = 3; i < frame.length; i++) {
-            crc += frame[i];
-        }
-        if (crc != frame[2]) {
-            outgoingACK = 1;
-            return null;
-        } else outgoingACK = 3;
-
-        //Grab data
-        String message = null;
-        byte[] messageBytes = new byte[frame[3]];
-        for (int i = 0; i < frame[3]; i++) {
-            messageBytes[i] = frame[5 + i];
-        }
-        message = new String(messageBytes);
-
-        //Attach source to final string
-        int casSrc = (frame[1] & 0b11110000) >> 4;
-        int nodeSrc = frame[1] & 0b00001111;
-        return casSrc + "_" + nodeSrc + ":" + message;
+    /**
+     * Synchronously sets transmission wait flag to allow/block transmit method from sending next frame
+     * @param flag 0 to wait, 1 to continue, 2 to retransmit
+     */
+    private synchronized void setReaderWaitFlag(int flag) {
+        //0 - wait | 1 - all good | 2 - retransmit
+        this.readerWaitFlag = flag;
     }
 }
 
