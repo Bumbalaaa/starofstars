@@ -19,6 +19,7 @@ public class Node {
     private DataOutputStream out;
     private DataInputStream in;
     private int readerWaitFlag;
+    private final int TIMEOUT_DELAY = 5000;
 
     /**
      * Creates a node with given AS and Node IDs and connects it to the network.
@@ -32,7 +33,7 @@ public class Node {
         fullSrcID = casID + "_" + nodeID;
 
         try {
-            this.socket = new Socket("localhost", 1234);
+            this.socket = new Socket("localhost", 1000 + casID);
         } catch (IOException e) {
             System.out.println("Node " + this.casID + "_" + this.nodeID + ": Connection refused.");
             e.printStackTrace();
@@ -108,13 +109,21 @@ public class Node {
         while (fileReader.hasNextLine()) {
             Frame frame = new Frame(this.casID, this.nodeID, 0, fileReader.nextLine());
 
-            //Send message, wait for ACK, if retransmit (wait flag set to 2), then repeat
+            //Send message, wait for ACK, if retransmit (wait flag set to 2), then repeat up to maxTX times
             //bytes are re-encoded in case CRC error is on this end
+            int maxTX = 5;
             do {
                 byte[] bytes = Frame.encode(frame);
                 out.write(bytes);
                 setReaderWaitFlag(0);
-                while (this.readerWaitFlag == 0);
+                int timeout = 0;
+                --maxTX;
+                while (this.readerWaitFlag == 0) {
+                    if (++timeout >= TIMEOUT_DELAY || maxTX <= 0) {
+                        System.out.println("Node " + this.casID + "_" + this.nodeID + " Error: Timed out");
+                        break;
+                    }
+                }
             } while (this.readerWaitFlag == 2);
         }
 

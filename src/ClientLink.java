@@ -26,6 +26,7 @@ public class ClientLink implements Runnable {
     public ClientLink(Socket clientSocket, ArmSwitch armSwitch) {
         this.clientSocket = clientSocket;
         this.armSwitch = armSwitch;
+        new Thread(this).start();
     }
 
     /**
@@ -39,7 +40,7 @@ public class ClientLink implements Runnable {
                 byte[] buffer = new byte[1024];
                 if (in.available() > 0) {
                     in.read(buffer);
-                    armSwitch.addFrame(buffer, this);
+                    armSwitch.incomingLocal(buffer, this);
                 }
             }
 
