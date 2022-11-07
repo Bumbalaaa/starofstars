@@ -3,7 +3,7 @@ import java.net.Socket;
 import java.util.Scanner;
 
 /**
- * Node class of Star of Stars project
+ * <h3>Node class of Star of Stars project</h3>
  * Nodes transmit data from their input text file and output received data to their output text file.
  *
  * @author Ethan Coulthurst
@@ -11,8 +11,9 @@ import java.util.Scanner;
  * @version 1
  */
 public class Node {
-    private int casID;
-    private int nodeID;
+    private final int casID;
+    private final int nodeID;
+    private final String fullSrcID;
     private Socket socket;
     private int outgoingACK = 0;
     private DataOutputStream out;
@@ -28,6 +29,7 @@ public class Node {
     public Node(int casID, int nodeID) {
         this.casID = casID;
         this.nodeID = nodeID;
+        fullSrcID = casID + "_" + nodeID;
 
         try {
             this.socket = new Socket("localhost", 1234);
@@ -50,18 +52,16 @@ public class Node {
         new File(outputFilePath).createNewFile();
         FileWriter writer = new FileWriter(outputFilePath);
 
-        //TODO Add close flag (hijack ACK field) and exit loop
-        while (true) {
+        boolean listening = true;
+        while (listening) {
             if (in.available() > 0) {
                 byte[] buffer = new byte[1024];
                 in.read(buffer);
                 Frame frame = Frame.decode(buffer);
 
-                String src = frame.getCasSrc() + "_" + frame.getNodeSrc();
-
                 //If CRC is wrong, ask for retransmission
                 if (!frame.isCrcVerified()) {
-                    Frame ackFrame = new Frame(this.casID, this.nodeID, 1, src + ":");
+                    Frame ackFrame = new Frame(this.casID, this.nodeID, 1, this.fullSrcID + ":");
                     byte[] bytes = Frame.encode(ackFrame);
                     out.write(bytes);
                     continue;
@@ -77,6 +77,9 @@ public class Node {
                         case 3:
                             setReaderWaitFlag(1);
                             break;
+                        case 255:
+                            listening = false;
+                            break;
                         default:
                             System.out.println("Node " + this.casID + "_" + this.nodeID + ": Invalid ACK response received");
                     }
@@ -84,12 +87,14 @@ public class Node {
                     //Otherwise, normal frame, write to file and send positive ACK
                     writer.write(frame.getData());
 
-                    Frame ackFrame = new Frame(this.casID, this.nodeID, 3, src + ":");
+                    Frame ackFrame = new Frame(this.casID, this.nodeID, 3, this.fullSrcID + ":");
                     byte[] bytes = Frame.encode(ackFrame);
                     out.write(bytes);
                 }
             }
-        }
+        } //Loop - Listen for messages
+
+        writer.close();
     }
 
     /**
@@ -112,6 +117,11 @@ public class Node {
                 while (this.readerWaitFlag == 0);
             } while (this.readerWaitFlag == 2);
         }
+
+        //Send end signal
+        Frame closeFrame = new Frame(this.casID, this.nodeID, 255, this.fullSrcID + ":");
+        byte[] bytes = Frame.encode(closeFrame);
+        out.write(bytes);
     }
 
     /**

@@ -1,7 +1,7 @@
 import java.io.IOException;
 
 /**
- * NodeListener class of Star of Stars project
+ * <h3>NodeListener class of Star of Stars project</h3>
  * NodeListener is a helper class instantiated by a Node's constructor that
  * creates 2 threads to run that Node's transmit and receive methods
  *

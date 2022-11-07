@@ -1,5 +1,5 @@
 /**
- * Frame class of Star of Stars project
+ * <h3>Frame class of Star of Stars project</h3>
  * Frames are used to build data packets to be sent to the network
  * Frames can be encoded into a byte array to be sent, and vice versa
  *
