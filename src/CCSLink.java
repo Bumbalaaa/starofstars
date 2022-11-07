@@ -2,29 +2,27 @@ import java.io.*;
 import java.net.Socket;
 
 /**
- * <h3>ClientLink class of Star of Stars project</h3>
- * ClientLink objects are threads storing the socket connection to their respective node.
- * Each node has a ClientLink object created by its arm switch that listens for packets
- * and sends them to the switch's frame buffer, and is used by the switch to send
- * packets back to its node.
+ * <h3>CCSLink class of Star of Stars project</h3>
+ * CCSLink functions identically to ClientLink, but connects to the main switch instead of nodes.
  *
+ * @see ClientLink
  * @author Ethan Coulthurst
  * @author Antonio Arant
  * @version 1
  */
-public class ClientLink implements Runnable {
-    private final Socket clientSocket;
+public class CCSLink implements Runnable {
+    private final Socket switchSocket;
     private final ArmSwitch armSwitch;
     private DataInputStream in;
     private DataOutputStream out;
 
     /**
-     * Creates a new client link to attach to a node socket
-     * @param clientSocket Linked client socket
+     * Creates a new link to attach to a core switch socket
+     * @param switchSocket Linked core switch socket
      * @param armSwitch Reference to switch
      */
-    public ClientLink(Socket clientSocket, ArmSwitch armSwitch) {
-        this.clientSocket = clientSocket;
+    public CCSLink(Socket switchSocket, ArmSwitch armSwitch) {
+        this.switchSocket = switchSocket;
         this.armSwitch = armSwitch;
         new Thread(this).start();
     }
@@ -34,17 +32,17 @@ public class ClientLink implements Runnable {
      */
     public void run() {
         try {
-            in = new DataInputStream(clientSocket.getInputStream());
-            out = new DataOutputStream(clientSocket.getOutputStream());
+            in = new DataInputStream(switchSocket.getInputStream());
+            out = new DataOutputStream(switchSocket.getOutputStream());
             while (armSwitch.isRunning()) {
                 byte[] buffer = new byte[255];
                 if (in.available() > 0) {
                     in.read(buffer);
-                    armSwitch.incomingLocal(buffer, this);
+                    armSwitch.incomingGlobal(buffer);
                 }
             }
 
-            this.clientSocket.close();
+            this.switchSocket.close();
         } catch (IOException e) {
             e.printStackTrace();
         }

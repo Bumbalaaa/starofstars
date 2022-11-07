@@ -1,3 +1,5 @@
+import java.io.*;
+import java.net.Socket;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -16,6 +18,7 @@ public class ArmSwitch implements Runnable {
     private HashMap<Integer, ClientLink> clients;
     private ArrayList<byte[]> localBuffer;
     private ArrayList<byte[]> globalBuffer;
+    private Socket ccsLink;
     private final int switchID;
 
     public ArmSwitch(int switchID) {
@@ -23,13 +26,20 @@ public class ArmSwitch implements Runnable {
         this.clients = new HashMap<>();
         this.localBuffer = new ArrayList<>();
         this.switchID = switchID;
+        try {
+            this.ccsLink = new Socket("localhost", 5000);
+        } catch (IOException e) {
+            System.out.println("Arm Switch " + this.switchID + ": Error connecting to central switch");
+            e.printStackTrace();
+        }
 
         new ClientAcceptor(this, this.switchID);
+        new CCSLink(this.ccsLink, this);
         new Thread(this).start();
     }
 
     public void run() {
-
+        //TODO Route global/local traffic
     }
 
     public void incomingLocal(byte[] bytes, ClientLink client) {
@@ -44,7 +54,8 @@ public class ArmSwitch implements Runnable {
     }
 
     public void incomingGlobal(byte[] bytes) {
-
+        //TODO Process incoming global frames (could check firewall at this step)
+        globalBuffer.add(bytes);
     }
 
     public boolean isRunning() {
