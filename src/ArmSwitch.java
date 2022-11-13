@@ -21,6 +21,7 @@ public class ArmSwitch implements Runnable {
 
     private ArrayList<Integer> fireWall;
     private Socket ccsLink;
+    private CCSLink link;
     private final int switchID;
 
     public ArmSwitch(int switchID) {
@@ -36,7 +37,7 @@ public class ArmSwitch implements Runnable {
         }
 
         new ClientAcceptor(this, this.switchID);
-        new CCSLink(this.ccsLink, this);
+        link = new CCSLink(this.ccsLink, this);
         new Thread(this).start();
     }
 
@@ -68,9 +69,7 @@ public class ArmSwitch implements Runnable {
                                 if (clients.containsKey(frameByte[0])) {
                                     clients.get(frameByte[0]).write(frameByte);
                                 } else {
-                                    for (ClientLink client : clients.values()) {
-                                        client.write(frameByte);
-                                    }
+                                    link.write(frameByte);
                                 }
                             }
                         }
@@ -81,16 +80,7 @@ public class ArmSwitch implements Runnable {
             synchronized (globalBuffer){
                 if(!globalBuffer.isEmpty()){
                     frameByte = globalBuffer.remove(0);
-
-                    synchronized (clients) {
-                        if (clients.containsKey(frameByte[0])) {
-                            clients.get(frameByte[0]).write(frameByte);
-                        } else {
-                            for (ClientLink client : clients.values()) {
-                                client.write(frameByte);
-                            }
-                        }
-                    }
+                    link.write(frameByte);
                 }
             }
         }
