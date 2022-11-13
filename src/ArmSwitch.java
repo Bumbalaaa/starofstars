@@ -18,6 +18,8 @@ public class ArmSwitch implements Runnable {
     private HashMap<Integer, ClientLink> clients;
     private ArrayList<byte[]> localBuffer;
     private ArrayList<byte[]> globalBuffer;
+
+    private ArrayList<Integer> fireWall;
     private Socket ccsLink;
     private final int switchID;
 
@@ -39,7 +41,59 @@ public class ArmSwitch implements Runnable {
     }
 
     public void run() {
-        //TODO Route global/local traffic
+        while(isRunning){
+            byte[] frameByte = null;
+            synchronized (localBuffer) {
+                if (!localBuffer.isEmpty()) {
+                    frameByte = localBuffer.remove(0);
+
+
+                    boolean CTS = true;
+                    if (frameByte != null) {
+                        for (int blockedNode : fireWall) {
+                            if (frameByte[0] == blockedNode)
+                                CTS = false;
+                        }
+                        if (!CTS) {
+                            frameByte[0] = frameByte[1]; // Makes destination the source.
+                            frameByte[3] = 0b00000000; // sets size byte to zero to show it's an ack
+                            frameByte[4] = 0b00000010; // sets ack type to firewalled
+                            synchronized (clients) {
+                                if (clients.containsKey(frameByte[0])) {
+                                    clients.get(frameByte[0]).write(frameByte);
+                                }
+                            }
+                        } else {
+                            synchronized (clients) {
+                                if (clients.containsKey(frameByte[0])) {
+                                    clients.get(frameByte[0]).write(frameByte);
+                                } else {
+                                    for (ClientLink client : clients.values()) {
+                                        client.write(frameByte);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            synchronized (globalBuffer){
+                if(!globalBuffer.isEmpty()){
+                    frameByte = globalBuffer.remove(0);
+
+                    synchronized (clients) {
+                        if (clients.containsKey(frameByte[0])) {
+                            clients.get(frameByte[0]).write(frameByte);
+                        } else {
+                            for (ClientLink client : clients.values()) {
+                                client.write(frameByte);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     public void incomingLocal(byte[] bytes, ClientLink client) {
