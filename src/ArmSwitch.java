@@ -19,7 +19,7 @@ public class ArmSwitch implements Runnable {
     private ArrayList<byte[]> localBuffer;
     private ArrayList<byte[]> globalBuffer;
 
-    private ArrayList<Integer> fireWall;
+    private ArrayList<Integer> firewall;
     private Socket ccsLink;
     private CCSLink link;
     private final int switchID;
@@ -51,7 +51,7 @@ public class ArmSwitch implements Runnable {
 
                     boolean CTS = true;
                     if (frameByte != null) {
-                        for (int blockedNode : fireWall) {
+                        for (int blockedNode : firewall) {
                             if (frameByte[0] == blockedNode)
                                 CTS = false;
                         }
