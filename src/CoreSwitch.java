@@ -11,7 +11,11 @@ public class CoreSwitch implements Runnable {
     private ArrayList<byte[]> frameBuffer;
     private ArrayList<Integer> blockedNodes;
     private ArrayList<Integer> blockedSwitches;
+    private byte[] firewallPacket;
 
+    /**
+     * Creates a new core switch and loads firewall table
+     */
     public CoreSwitch() {
         this.unknownSwitches = new ArrayList<>();
         this.switches = new HashMap<>();
@@ -31,16 +35,51 @@ public class CoreSwitch implements Runnable {
             if (!frameBuffer.isEmpty()) {
                 frame = frameBuffer.remove(0);
 
-                boolean CTS = true;
+                boolean allowFrame = true;
+                if (frame != null) {
+                    for (int blockedSwitch : blockedSwitches) {
+                        if (frame[0] >> 4 == blockedSwitch) allowFrame = false;
+                    }
 
+                    if (!allowFrame) {
+                        frame[0] = frame[1]; // Makes destination the source.
+                        frame[3] = 0b00000000; // sets size byte to zero to show it's an ack
+                        frame[4] = 0b00000010; // sets ack type to firewalled
+
+                        synchronized (switches) {
+                            if (switches.containsKey(frame[0])) {
+                                switches.get(frame[0]).write(frame);
+                            } else {
+                                System.out.println("Error: Arm switch source unknown. How did this even happen");
+                            }
+                        }
+                    } else {
+                        synchronized (switches) {
+                            if (switches.containsKey(frame[0])) {
+                                switches.get(frame[0]).write(frame);
+                            } else {
+                                //TODO - Flood packet to all arm switches & set ack type to 100 (int value 4) so no return ack needed
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 
+    /**
+     * Get running state of core switch
+     * @return true if running, false otherwise
+     */
     public boolean isRunning() {
         return this.isRunning;
     }
 
+    /**
+     * Reads in an incoming frame from an arm switch. Called by CASLink instances
+     * @param bytes packet
+     * @param armLink source arm switch
+     */
     public void incomingFrame(byte[] bytes, CASLink armLink) {
         synchronized (switches) {
             if (!switches.containsKey(bytes[1])) {
@@ -51,10 +90,18 @@ public class CoreSwitch implements Runnable {
         frameBuffer.add(bytes);
     }
 
+    /**
+     * Adds a new arm switch connection to list of unknown clients and sends firewall table to switch
+     * @param armSwitch Instance of CASLink connected to respective arm switch
+     */
     public synchronized void addSwitch(CASLink armSwitch) {
         unknownSwitches.add(armSwitch);
+        armSwitch.write(firewallPacket);
     }
 
+    /**
+     * Reads in "firewall.txt" and loads firewall rules into 2 arrays: blocked switches and blocked nodes
+     */
     private void loadFirewall() {
         try {
             Scanner fileReader = new Scanner(new File("firewall.txt"));
@@ -71,6 +118,24 @@ public class CoreSwitch implements Runnable {
                     }
                 }
             }
+
+            //Sets up frame for list of blocked nodes. The blocked switch list only has to be processed by the core switch, so it wont be sent out.
+            //Sent to all new arm switches on connection
+            firewallPacket = new byte[5 + blockedNodes.size()];
+            firewallPacket[0] = 0;
+            firewallPacket[1] = 0;
+            firewallPacket[3] = (byte) (firewallPacket.length - 5);
+            firewallPacket[4] = 5;
+            int i = 5;
+            for (Integer node : blockedNodes) {
+                firewallPacket[i] = node.byteValue();
+            }
+            byte crc = 0;
+            for (byte data : firewallPacket) {
+                crc += data;
+            }
+            firewallPacket[2] = crc;
+
         } catch (IOException e) {
             System.out.println("Firewall read error.");
         }

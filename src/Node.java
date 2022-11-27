@@ -88,9 +88,12 @@ public class Node {
                     //Otherwise, normal frame, write to file and send positive ACK
                     writer.write(frame.getData());
 
-                    Frame ackFrame = new Frame(this.casID, this.nodeID, 3, this.fullSrcID + ":");
-                    byte[] bytes = Frame.encode(ackFrame);
-                    out.write(bytes);
+                    //Check if frame has been flooded, if so, no ACK necessary
+                    if (frame.getAck() != 4) {
+                        Frame ackFrame = new Frame(this.casID, this.nodeID, 3, this.fullSrcID + ":");
+                        byte[] bytes = Frame.encode(ackFrame);
+                        out.write(bytes);
+                    }
                 }
             }
         } //Loop - Listen for messages
@@ -149,4 +152,6 @@ public class Node {
     01 CRC Error (ReTX)
     10 Firewall (No TX)
     11 Positive ACK
+    100 Frame flooded, no ack necessary
+    101 Firewall rules (only used by switches)
  */
