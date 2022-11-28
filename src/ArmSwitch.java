@@ -77,7 +77,7 @@ public class ArmSwitch implements Runnable {
                                         clients.get(frameByte[0]).write(frameByte);
                                     } else {
                                         //if no unknown clients, send to global, else mark ack as flood, then send to global and flood
-                                        //shouldnt interfere with ack messages since ack messages should never be targetting unknown nodes
+                                        //shouldn't interfere with ack messages since ack messages should never be targeting unknown nodes
                                         if (unknownClients.isEmpty()) link.write(frameByte);
                                         else {
                                             frameByte[4] = 0b00000100;
@@ -94,6 +94,51 @@ public class ArmSwitch implements Runnable {
             synchronized (globalBuffer){
                 if(!globalBuffer.isEmpty()){
                     frameByte = globalBuffer.remove(0);
+
+                    boolean CTS = true;
+                    if (frameByte != null) {
+                        //check if ack type denotes firewall table, if so load, otherwise process normally
+                        if (frameByte[4] == 5) {
+                            for (int i = 5; i < 5 + frameByte[3]; i++) {
+                                this.firewall.add((int) frameByte[i]);
+                            }
+                        } else {
+                            for (int blockedNode : firewall) {
+                                if (frameByte[0] == blockedNode)
+                                    CTS = false;
+                            }
+                            if (!CTS) {
+                                frameByte[0] = frameByte[1]; // Makes destination the source.
+                                frameByte[3] = 0b00000000; // sets size byte to zero to show it's an ack
+                                frameByte[4] = 0b00000010; // sets ack type to firewalled
+//                                synchronized (clients) {
+//                                    if (clients.containsKey(frameByte[0])) {
+//                                        clients.get(frameByte[0]).write(frameByte);
+//                                    }
+//                                }
+
+                                //send back up to core arm switch for redistribution
+                                link.write(frameByte);
+                            } else {
+                                synchronized (clients) {
+                                    //if dest is known send there, else global/flood
+                                    if (clients.containsKey(frameByte[0])) {
+                                        clients.get(frameByte[0]).write(frameByte);
+                                    }
+//                                    else {
+//                                        //if no unknown clients, send to global, else mark ack as flood, then send to global and flood
+//                                        //shouldn't interfere with ack messages since ack messages should never be targeting unknown nodes
+//                                        if (unknownClients.isEmpty()) link.write(frameByte);
+//                                        else {
+//                                            frameByte[4] = 0b00000100;
+//                                            link.write(frameByte);
+//                                        }
+//                                    }
+                                }
+                            }
+                        }
+                    }
+
                     link.write(frameByte);
                 }
             }

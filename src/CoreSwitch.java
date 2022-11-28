@@ -7,6 +7,8 @@ import java.util.Scanner;
 public class CoreSwitch implements Runnable {
     private boolean isRunning = true;
     private ArrayList<CASLink> unknownSwitches;
+
+    private ArrayList<CASLink> knownSwitches;
     private HashMap<Integer, CASLink> switches;
     private ArrayList<byte[]> frameBuffer;
     private ArrayList<Integer> blockedNodes;
@@ -59,6 +61,12 @@ public class CoreSwitch implements Runnable {
                                 switches.get(frame[0]).write(frame);
                             } else {
                                 //TODO - Flood packet to all arm switches & set ack type to 100 (int value 4) so no return ack needed
+                                frame[4] = 0b00000100; // sets ack type to no return needed
+
+                                //it looks like the unkownSwitches array list is never cleared, which means it can be used to flood to all switches
+                                for(CASLink armSwitch: unknownSwitches){
+                                    armSwitch.write(frame);
+                                }
                             }
                         }
                     }
