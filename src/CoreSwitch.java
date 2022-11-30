@@ -63,8 +63,11 @@ public class CoreSwitch implements Runnable {
                                 //TODO - Flood packet to all arm switches & set ack type to 100 (int value 4) so no return ack needed
                                 frame[4] = 0b00000100; // sets ack type to no return needed
 
-                                //it looks like the unkownSwitches array list is never cleared, which means it can be used to flood to all switches
                                 for(CASLink armSwitch: unknownSwitches){
+                                    armSwitch.write(frame);
+                                }
+
+                                for (CASLink armSwitch : switches.values()) {
                                     armSwitch.write(frame);
                                 }
                             }
