@@ -7,8 +7,6 @@ import java.util.Scanner;
 public class CoreSwitch implements Runnable {
     private boolean isRunning = true;
     private ArrayList<CASLink> unknownSwitches;
-
-    private ArrayList<CASLink> knownSwitches;
     private HashMap<Integer, CASLink> switches;
     private ArrayList<byte[]> frameBuffer;
     private ArrayList<Integer> blockedNodes;
@@ -60,7 +58,6 @@ public class CoreSwitch implements Runnable {
                             if (switches.containsKey(frame[0])) {
                                 switches.get(frame[0]).write(frame);
                             } else {
-                                //TODO - Flood packet to all arm switches & set ack type to 100 (int value 4) so no return ack needed
                                 frame[4] = 0b00000100; // sets ack type to no return needed
 
                                 for(CASLink armSwitch: unknownSwitches){
@@ -107,6 +104,11 @@ public class CoreSwitch implements Runnable {
      */
     public synchronized void addSwitch(CASLink armSwitch) {
         unknownSwitches.add(armSwitch);
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
         armSwitch.write(firewallPacket);
     }
 

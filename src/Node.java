@@ -33,10 +33,12 @@ public class Node {
         fullSrcID = casID + "_" + nodeID;
 
         try {
-            this.socket = new Socket("localhost", 1000 + casID);
+            this.socket = new Socket("localhost", 1000 + this.casID);
+            System.out.println("Node " + this.casID + "_" + this.nodeID + ": Connecting to port " + (1000 + this.casID));
         } catch (IOException e) {
             System.out.println("Node " + this.casID + "_" + this.nodeID + ": Connection refused.");
             e.printStackTrace();
+            return;
         }
 
         new Thread(new NodeListener(NodeListener.ListenerType.RECEIVER, this)).start();
@@ -80,6 +82,7 @@ public class Node {
                             break;
                         case 255:
                             listening = false;
+                            System.out.println("Node " + this.casID + "_" + this.nodeID + ": End flag received");
                             break;
                         default:
                             System.out.println("Node " + this.casID + "_" + this.nodeID + ": Invalid ACK response received");

@@ -28,6 +28,7 @@ public class ArmSwitch implements Runnable {
         this.unknownClients = new ArrayList<>();
         this.clients = new HashMap<>();
         this.localBuffer = new ArrayList<>();
+        this.globalBuffer = new ArrayList<>();
         this.switchID = switchID;
         try {
             this.ccsLink = new Socket("localhost", 5000);
