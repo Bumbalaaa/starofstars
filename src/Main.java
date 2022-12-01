@@ -11,15 +11,15 @@ public class Main {
 //        int nodeAmt = Integer.parseInt(args[1]);
 //        int armSwitchAmt = Integer.parseInt(args[0]);
         int nodeAmt = 3;
-        int armSwitchAmt = 3;
+        int armSwitchAmt = 1;
 
         if (nodeAmt < 2 || nodeAmt > 16) {
             System.out.println("Node per arm amount (" + nodeAmt + ") must be between 2 and 16");
             return;
         }
 
-        if (armSwitchAmt < 2 || armSwitchAmt > 16) {
-            System.out.println("Arm switch amount (" + armSwitchAmt + ") must be between 2 and 16");
+        if (armSwitchAmt < 1 || armSwitchAmt > 16) {
+            System.out.println("Arm switch amount (" + armSwitchAmt + ") must be between 1 and 16");
             return;
         }
 

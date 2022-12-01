@@ -8,6 +8,7 @@ public class CoreSwitch implements Runnable {
     private boolean isRunning = true;
     private ArrayList<CASLink> unknownSwitches;
     private HashMap<Integer, CASLink> switches;
+    private int completedSwitches = 0;
     private ArrayList<byte[]> frameBuffer;
     private ArrayList<Integer> blockedNodes;
     private ArrayList<Integer> blockedSwitches;
@@ -26,46 +27,64 @@ public class CoreSwitch implements Runnable {
         loadFirewall();
 
         new SwitchAcceptor(this);
-
+        new Thread(this).start(); //Reminder: for the love of god, stop forgetting to include this line
     }
 
     public void run() {
         while (isRunning) {
             byte[] frame;
-            if (!frameBuffer.isEmpty()) {
-                frame = frameBuffer.remove(0);
+            synchronized (frameBuffer) {
+                if (!frameBuffer.isEmpty()) {
+                    System.out.println("Core received frame");
+                    frame = frameBuffer.remove(0);
 
-                boolean allowFrame = true;
-                if (frame != null) {
-                    for (int blockedSwitch : blockedSwitches) {
-                        if (frame[0] >> 4 == blockedSwitch) allowFrame = false;
-                    }
-
-                    if (!allowFrame) {
-                        frame[0] = frame[1]; // Makes destination the source.
-                        frame[3] = 0b00000000; // sets size byte to zero to show it's an ack
-                        frame[4] = 0b00000010; // sets ack type to firewalled
-
-                        synchronized (switches) {
-                            if (switches.containsKey(frame[0])) {
-                                switches.get(frame[0]).write(frame);
-                            } else {
-                                System.out.println("Error: Arm switch source unknown. How did this even happen");
-                            }
-                        }
-                    } else {
-                        synchronized (switches) {
-                            if (switches.containsKey(frame[0])) {
-                                switches.get(frame[0]).write(frame);
-                            } else {
-                                frame[4] = 0b00000100; // sets ack type to no return needed
-
-                                for(CASLink armSwitch: unknownSwitches){
+                    boolean allowFrame = true;
+                    if (frame != null) {
+                        if (frame[4] == 255) {
+                            if (++completedSwitches >= unknownSwitches.size() + switches.size()) {
+                                for (CASLink armSwitch : unknownSwitches) {
                                     armSwitch.write(frame);
                                 }
 
                                 for (CASLink armSwitch : switches.values()) {
                                     armSwitch.write(frame);
+                                }
+                            }
+                        } else {
+                            for (int blockedSwitch : blockedSwitches) {
+                                if (frame[0] >> 4 == blockedSwitch) allowFrame = false;
+                            }
+
+                            if (!allowFrame) {
+                                frame[0] = frame[1]; // Makes destination the source.
+                                frame[3] = 0b00000000; // sets size byte to zero to show it's an ack
+                                frame[4] = 0b00000010; // sets ack type to firewalled
+
+                                synchronized (switches) {
+                                    if (switches.containsKey(frame[0])) {
+                                        System.out.println("Global frame firewalled, sending back");
+                                        switches.get(frame[0]).write(frame);
+                                    } else {
+                                        System.out.println("Error: Arm switch source unknown. How did this even happen");
+                                    }
+                                }
+                            } else {
+                                synchronized (switches) {
+                                    if (switches.containsKey(frame[0] >> 4)) {
+                                        System.out.println("Core sending frame to arm");
+                                        switches.get(frame[0]).write(frame);
+                                        //TODO - Figure out why this could be null, especially since the above if statement checks if the object exists - debugger even shows it as populated
+                                    } else {
+                                        frame[4] = 0b00000100; // sets ack type to no return needed
+                                        System.out.println("Core flooding frame");
+                                        for (CASLink armSwitch : unknownSwitches) {
+                                            armSwitch.write(frame);
+                                        }
+
+                                        for (CASLink armSwitch : switches.values()) {
+                                            armSwitch.write(frame);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -91,11 +110,14 @@ public class CoreSwitch implements Runnable {
     public void incomingFrame(byte[] bytes, CASLink armLink) {
         synchronized (switches) {
             if (!switches.containsKey(bytes[1])) {
+                System.out.println("Core found new switch, adding to list");
                 switches.put((int) bytes[1], armLink);
             }
         }
-
-        frameBuffer.add(bytes);
+        System.out.println("Core adding frame to buffer");
+        synchronized (frameBuffer) {
+            frameBuffer.add(bytes);
+        }
     }
 
     /**

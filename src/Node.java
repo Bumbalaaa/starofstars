@@ -19,7 +19,7 @@ public class Node {
     private DataOutputStream out;
     private DataInputStream in;
     private int readerWaitFlag;
-    private final int TIMEOUT_DELAY = 5000;
+    private final int TIMEOUT_DELAY = 100000;
 
     /**
      * Creates a node with given AS and Node IDs and connects it to the network.
@@ -33,9 +33,10 @@ public class Node {
         fullSrcID = casID + "_" + nodeID;
 
         try {
+            Thread.sleep(100);
             this.socket = new Socket("localhost", 1000 + this.casID);
             System.out.println("Node " + this.casID + "_" + this.nodeID + ": Connecting to port " + (1000 + this.casID));
-        } catch (IOException e) {
+        } catch (IOException | InterruptedException e) {
             System.out.println("Node " + this.casID + "_" + this.nodeID + ": Connection refused.");
             e.printStackTrace();
             return;
@@ -112,6 +113,12 @@ public class Node {
         out = new DataOutputStream(socket.getOutputStream());
         Scanner fileReader = new Scanner(new File("node" + this.casID + "_" + this.nodeID + ".txt"));
 
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
         while (fileReader.hasNextLine()) {
             Frame frame = new Frame(this.casID, this.nodeID, 0, fileReader.nextLine());
 
@@ -125,7 +132,7 @@ public class Node {
                 int timeout = 0;
                 --maxTX;
                 while (this.readerWaitFlag == 0) {
-                    if (++timeout >= TIMEOUT_DELAY || maxTX <= 0) {
+                    if (timeout >= TIMEOUT_DELAY || maxTX <= 0) {
                         System.out.println("Node " + this.casID + "_" + this.nodeID + " Error: Timed out");
                         break;
                     }
@@ -134,6 +141,7 @@ public class Node {
         }
 
         //Send end signal
+        System.out.println("Node " + this.casID + "_" + this.nodeID + ": Sending end flag");
         Frame closeFrame = new Frame(this.casID, this.nodeID, 255, this.fullSrcID + ":");
         byte[] bytes = Frame.encode(closeFrame);
         out.write(bytes);

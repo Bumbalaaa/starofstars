@@ -58,10 +58,11 @@ public class Frame {
         bytes[1] = (byte) ((frame.casSrc << 4) | frame.nodeSrc);
 
         //Size
-        bytes[3] = (byte) dataElements[1].length();
+        if (dataElements.length > 1) bytes[3] = (byte) dataElements[1].length();
+        else bytes[3] = 0;
 
         //Data
-        byte[] message = dataElements[1].getBytes();
+        byte[] message = dataElements.length > 1 ? dataElements[1].getBytes() : "".getBytes();
         int i = 5;
         for (byte b : message) {
             bytes[i++] = b;
