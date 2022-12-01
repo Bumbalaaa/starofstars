@@ -146,23 +146,25 @@ public class ArmSwitch implements Runnable {
                                         //if dest is known send there, else global/flood
                                         if (clients.containsKey(frameByte[0])) {
                                             clients.get(frameByte[0]).write(frameByte);
+                                        } else {
+                                            //if no unknown clients, send to global, else mark ack as flood, then send to global and flood
+                                            //shouldn't interfere with ack messages since ack messages should never be targeting unknown nodes
+                                            if (this.switchID != frameByte[1] >> 4) link.write(frameByte);
+                                            else {
+                                                frameByte[4] = 0b00000100;
+                                                for (ClientLink client : clients.values()) {
+                                                    client.write(frameByte);
+                                                }
+                                                for (ClientLink client : unknownClients) {
+                                                    client.write(frameByte);
+                                                }
+                                            }
                                         }
-//                                    else {
-//                                        //if no unknown clients, send to global, else mark ack as flood, then send to global and flood
-//                                        //shouldn't interfere with ack messages since ack messages should never be targeting unknown nodes
-//                                        if (unknownClients.isEmpty()) link.write(frameByte);
-//                                        else {
-//                                            frameByte[4] = 0b00000100;
-//                                            link.write(frameByte);
-//                                        }
-//                                    }
                                     }
                                 }
                             }
                         }
                     }
-
-                    link.write(frameByte);
                 }
             }
         }

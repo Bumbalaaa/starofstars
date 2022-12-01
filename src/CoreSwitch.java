@@ -40,6 +40,7 @@ public class CoreSwitch implements Runnable {
 
                     boolean allowFrame = true;
                     if (frame != null) {
+                        //If ack type is end signal, check if all other switches have sent end signal, if so, flood end signal back to all nodes
                         if (frame[4] == 255) {
                             if (++completedSwitches >= unknownSwitches.size() + switches.size()) {
                                 for (CASLink armSwitch : unknownSwitches) {
@@ -51,6 +52,7 @@ public class CoreSwitch implements Runnable {
                                 }
                             }
                         } else {
+                            //firewall check
                             for (int blockedSwitch : blockedSwitches) {
                                 if (frame[0] >> 4 == blockedSwitch) allowFrame = false;
                             }
@@ -72,7 +74,12 @@ public class CoreSwitch implements Runnable {
                                 synchronized (switches) {
                                     if (switches.containsKey(frame[0] >> 4)) {
                                         System.out.println("Core sending frame to arm");
-                                        switches.get(frame[0]).write(frame);
+                                        Integer dest = (int) frame[0] >> 4;
+                                        if (switches.get(dest) != null) {
+                                            switches.get(dest).write(frame);
+                                        } else {
+                                            System.out.println("CAS Instance returned null");
+                                        }
                                         //TODO - Figure out why this could be null, especially since the above if statement checks if the object exists - debugger even shows it as populated
                                     } else {
                                         frame[4] = 0b00000100; // sets ack type to no return needed
@@ -109,9 +116,10 @@ public class CoreSwitch implements Runnable {
      */
     public void incomingFrame(byte[] bytes, CASLink armLink) {
         synchronized (switches) {
-            if (!switches.containsKey(bytes[1])) {
+            if (!switches.containsKey(bytes[1] >> 4)) {
                 System.out.println("Core found new switch, adding to list");
-                switches.put((int) bytes[1], armLink);
+                Integer src = (int) bytes[1];
+                switches.put(src, armLink);
             }
         }
         System.out.println("Core adding frame to buffer");
