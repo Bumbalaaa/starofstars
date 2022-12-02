@@ -14,6 +14,7 @@ import java.net.Socket;
 public class ClientAcceptor implements Runnable {
     private ArmSwitch armSwitch;
     private final int port;
+    private ServerSocket serverSocket;
 
     /**
      * Creates a new ClientAcceptor thread
@@ -30,7 +31,7 @@ public class ClientAcceptor implements Runnable {
      */
     public void run() {
         try {
-            ServerSocket serverSocket = new ServerSocket(port);
+            this.serverSocket = new ServerSocket(port);
             System.out.println("Cas " + (port - 1000) + " listening on port " + port);
             while (armSwitch.isRunning()) {
                 Socket newClient = serverSocket.accept();
@@ -39,6 +40,14 @@ public class ClientAcceptor implements Runnable {
             }
         } catch (IOException e) {
             System.out.println("Server socket closed.");
+        }
+    }
+
+    public void closeServer() {
+        try {
+            this.serverSocket.close();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 }

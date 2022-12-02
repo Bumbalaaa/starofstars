@@ -62,6 +62,9 @@ public class Node {
                 byte[] buffer = new byte[1024];
                 in.read(buffer);
                 System.out.println("RECEIVED FRAME " + this.nodeID);
+                if (buffer[4] == 123) {
+                    System.out.println("End signal received");
+                }
                 Frame frame = Frame.decode(buffer);
 
                 //If CRC is wrong, ask for retransmission
@@ -74,7 +77,7 @@ public class Node {
                 //System.out.println("CRC VERIFIED");
                 //Check if frame is an ACK response (or ACK type value that we've hijacked)
                 System.out.println("SIZE " + frame.getSize());
-                if (frame.getSize() == 0) {
+                if (!(frame.getAck() == 0b00000111 || frame.getAck() == 0b00000100)) {
                     System.out.println("GOT ACK");
                     switch (frame.getAck()) {
                         case 1:
@@ -82,18 +85,20 @@ public class Node {
                             break;
                         case 2:
                         case 3:
+                        case 4:
                             System.out.println("SET FLAG TO ALL GOOD");
                             setReaderWaitFlag(1);
                             break;
-                        case 255:
+                        case 123:
                             listening = false;
                             System.out.println("Node " + this.casID + "_" + this.nodeID + ": End flag received");
                             break;
                         default:
-                            System.out.println("Node " + this.casID + "_" + this.nodeID + ": Invalid ACK response received");
+                            System.out.println("Node " + this.casID + "_" + this.nodeID + ": Invalid ACK response received: " + frame.getAck());
                     }
                 } else {
                     //Otherwise, normal frame, write to file and send positive ACK
+                    System.out.println("Node " + this.casID + "_" + this.nodeID + ": Writing to file: " + frame.getData());
                     writer.write(frame.getData());
 
                     //Check if frame has been flooded, if so, no ACK necessary
@@ -110,15 +115,17 @@ public class Node {
                         String s2 = String.valueOf(dest2);
                         String dest = s1 + "_" + s2;
 
-                        Frame ackFrame = new Frame(this.casID, this.nodeID, 3, dest+ ":");
+                        Frame ackFrame = new Frame(this.casID, this.nodeID, 3, dest + ":ACK");
                         byte[] ackBytes = Frame.encode(ackFrame);
+                        System.out.println("Sending ACK");
                         out.write(ackBytes);
+                    } else {
+                        System.out.println("FLOODED FRAME");
                     }
-                    System.out.println("FLOODED FRAME");
                 }
             }
         } //Loop - Listen for messages
-
+        System.out.println("Node " + this.casID + "_" + this.nodeID + ": Program finished");
         writer.close();
     }
 
@@ -137,14 +144,14 @@ public class Node {
         }
 
         while (fileReader.hasNextLine()) {
-            System.out.println("READER Has NEXT LINE");
-            Frame frame = new Frame(this.casID, this.nodeID, 0, fileReader.nextLine());
+//            System.out.println("READER Has NEXT LINE");
+            Frame frame = new Frame(this.casID, this.nodeID, 111, fileReader.nextLine());
 
             //Send message, wait for ACK, if retransmit (wait flag set to 2), then repeat up to maxTX times
             //bytes are re-encoded in case CRC error is on this end
             int maxTX = 5;
             do {
-                System.out.println("IN TIMEOUT LOOP");
+//                System.out.println("IN TIMEOUT LOOP");
                 byte[] bytes = Frame.encode(frame);
                 out.write(bytes);
                 setReaderWaitFlag(0);
@@ -157,14 +164,19 @@ public class Node {
                         break;
                     }
                 }
-                System.out.println("OUT OF 0 FLAG");
+//                System.out.println("OUT OF 0 FLAG");
             } while (this.readerWaitFlag == 2);
-            System.out.println("OUT OF TIMEOUT LOOP");
+//            System.out.println("OUT OF TIMEOUT LOOP");
         }
 
         //Send end signal
-        System.out.println("Node " + this.casID + "_" + this.nodeID + ": Sending end flag");
-        Frame closeFrame = new Frame(this.casID, this.nodeID, 255, this.fullSrcID + ":");
+        try {
+            Thread.sleep(200);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        System.out.println("Node " + this.casID + "_" + this.nodeID + ": Sending end flag ---------------------------------------------");
+        Frame closeFrame = new Frame(this.casID, this.nodeID, 123, this.fullSrcID + ":CLOSE");
         byte[] bytes = Frame.encode(closeFrame);
         out.write(bytes);
     }
@@ -187,4 +199,6 @@ public class Node {
     11 Positive ACK
     100 Frame flooded, no ack necessary
     101 Firewall rules (only used by switches)
+    111 Normal message
+    123 End signal
  */

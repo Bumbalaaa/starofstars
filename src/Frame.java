@@ -74,7 +74,7 @@ public class Frame {
         //CRC - MUST BE LAST
         byte crc = 0;
         for (byte b : bytes) {
-            //technically this should work cause at this point the crc bit (bytes[2]) is 0
+            //technically this should work cause at this point the crc byte (bytes[2]) is 0
             crc += b;
         }
         bytes[2] = crc;
@@ -111,7 +111,7 @@ public class Frame {
 
         //Build frame
         Frame frame = new Frame(casSrc, nodeSrc, ack, data);
-        frame.crcVerified = crcVerified;
+        frame.crcVerified = true;
         frame.size = messageBytes.length;
         System.out.println("MessageBytes: " + messageBytes[3]);
         return frame;

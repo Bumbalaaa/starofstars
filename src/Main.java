@@ -13,13 +13,13 @@ public class Main {
         int nodeAmt = 3;
         int armSwitchAmt = 1;
 
-        if (nodeAmt < 2 || nodeAmt > 16) {
-            System.out.println("Node per arm amount (" + nodeAmt + ") must be between 2 and 16");
+        if (nodeAmt < 2 || nodeAmt > 8) {
+            System.out.println("Node per arm amount (" + nodeAmt + ") must be between 2 and 8");
             return;
         }
 
-        if (armSwitchAmt < 1 || armSwitchAmt > 16) {
-            System.out.println("Arm switch amount (" + armSwitchAmt + ") must be between 1 and 16");
+        if (armSwitchAmt < 1 || armSwitchAmt > 8) {
+            System.out.println("Arm switch amount (" + armSwitchAmt + ") must be between 1 and 8");
             return;
         }
 

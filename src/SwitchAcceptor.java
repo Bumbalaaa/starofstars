@@ -14,6 +14,7 @@ import java.net.Socket;
 public class SwitchAcceptor implements Runnable {
     private CoreSwitch coreSwitch;
     private final int port = 5000;
+    private ServerSocket serverSocket;
 
     /**
      * Creates a new SwitchAcceptor thread
@@ -29,7 +30,7 @@ public class SwitchAcceptor implements Runnable {
      */
     public void run() {
         try {
-            ServerSocket serverSocket = new ServerSocket(port);
+            serverSocket = new ServerSocket(port);
             while (coreSwitch.isRunning()) {
                 Socket newSwitch = serverSocket.accept();
                 System.out.println("Core switch accepted new client");
@@ -37,6 +38,14 @@ public class SwitchAcceptor implements Runnable {
             }
         } catch (IOException e) {
             System.out.println("Server socket closed.");
+        }
+    }
+
+    public void closeServer() {
+        try {
+            this.serverSocket.close();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 }

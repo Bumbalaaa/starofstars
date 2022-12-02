@@ -13,6 +13,7 @@ public class CoreSwitch implements Runnable {
     private ArrayList<Integer> blockedNodes;
     private ArrayList<Integer> blockedSwitches;
     private byte[] firewallPacket;
+    private SwitchAcceptor acceptor;
 
     /**
      * Creates a new core switch and loads firewall table
@@ -26,7 +27,7 @@ public class CoreSwitch implements Runnable {
         this.blockedNodes = new ArrayList<>();
         loadFirewall();
 
-        new SwitchAcceptor(this);
+        this.acceptor = new SwitchAcceptor(this);
         new Thread(this).start(); //Reminder: for the love of god, stop forgetting to include this line
     }
 
@@ -41,8 +42,10 @@ public class CoreSwitch implements Runnable {
                     boolean allowFrame = true;
                     if (frame != null) {
                         //If ack type is end signal, check if all other switches have sent end signal, if so, flood end signal back to all nodes
-                        if (frame[4] == 255) {
-                            if (++completedSwitches >= unknownSwitches.size() + switches.size()) {
+                        if (frame[4] == 123) {
+                            completedSwitches++;
+                            if (completedSwitches >= unknownSwitches.size() + switches.size()) {
+                                System.out.println("Core sending end signal");
                                 for (CASLink armSwitch : unknownSwitches) {
                                     armSwitch.write(frame);
                                 }
@@ -50,6 +53,14 @@ public class CoreSwitch implements Runnable {
                                 for (CASLink armSwitch : switches.values()) {
                                     armSwitch.write(frame);
                                 }
+
+                                try {
+                                    Thread.sleep(200);
+                                } catch (InterruptedException e) {
+                                    e.printStackTrace();
+                                }
+                                this.isRunning = false;
+                                this.acceptor.closeServer();
                             }
                         } else {
                             //firewall check
@@ -118,12 +129,13 @@ public class CoreSwitch implements Runnable {
     public void incomingFrame(byte[] bytes, CASLink armLink) {
         synchronized (switches) {
             if (!switches.containsKey(bytes[1] >> 4)) {
-                System.out.println("Core found new switch, adding to list");
+//                System.out.println("Core found new switch, adding to list");
                 Integer src = (int) bytes[1];
                 switches.put(src, armLink);
+                unknownSwitches.remove(armLink);
             }
         }
-        System.out.println("Core adding frame to buffer");
+//        System.out.println("Core adding frame to buffer");
         synchronized (frameBuffer) {
             frameBuffer.add(bytes);
         }

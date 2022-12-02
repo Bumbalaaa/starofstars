@@ -24,6 +24,7 @@ public class ArmSwitch implements Runnable {
     private Socket ccsLink;
     private CCSLink link;
     private final int switchID;
+    private ClientAcceptor acceptor;
 
     public ArmSwitch(int switchID) {
         this.unknownClients = new ArrayList<>();
@@ -40,7 +41,7 @@ public class ArmSwitch implements Runnable {
             e.printStackTrace();
         }
 
-        new ClientAcceptor(this, this.switchID);
+        this.acceptor = new ClientAcceptor(this, this.switchID);
         link = new CCSLink(this.ccsLink, this);
         new Thread(this).start();
     }
@@ -54,15 +55,15 @@ public class ArmSwitch implements Runnable {
 
                     boolean CTS = true;
                     if (frameByte != null) {
-
                         //check if ack type denotes firewall table, if so load, otherwise process normally
                         if (frameByte[4] == 5) {
                             for (int i = 5; i < 5 + frameByte[3]; i++) {
                                 this.firewall.add((int) frameByte[i]);
                             }
                         //check if ack type denotes end signal, if so forward to core switch
-                        } else if (frameByte[4] == 255) {
+                        } else if (frameByte[4] == 123) {
                             if (++completedClients >= unknownClients.size() + clients.size()) {
+                                System.out.println("ARM " + this.switchID + " SENDING END TO CORE --------------------------------------------");
                                 link.write(frameByte);
                             }
                         } else {
@@ -95,7 +96,7 @@ public class ArmSwitch implements Runnable {
                                         } else {
                                             frameByte[4] = 0b00000100;
                                             System.out.println("Arm Flooding frame");
-                                            link.write(frameByte);
+                                            this.flood(frameByte);
                                         }
                                     }
                                 }
@@ -117,13 +118,21 @@ public class ArmSwitch implements Runnable {
                                 this.firewall.add((int) frameByte[i]);
                             }
                         } else {
-                            if (frameByte[4] == 255) {
+                            if (frameByte[4] == 123) {
                                 for (ClientLink client : clients.values()) {
                                     client.write(frameByte);
                                 }
                                 for (ClientLink client : unknownClients) {
                                     client.write(frameByte);
                                 }
+
+                                try {
+                                    Thread.sleep(200);
+                                } catch (InterruptedException e) {
+                                    e.printStackTrace();
+                                }
+                                this.isRunning = false;
+                                this.acceptor.closeServer();
                             } else {
                                 for (int blockedNode : firewall) {
                                     if (frameByte[0] == blockedNode)
@@ -201,29 +210,34 @@ public class ArmSwitch implements Runnable {
             client.write(frameByte);
         }
 
-        //System.out.println("Source " +frameByte[1]);
-        int dest1 = frameByte[1] & 0b11110000;
-        //System.out.println("dest1" + dest1);
-        int dest2 = frameByte[1] & 0b00001111;
-        //System.out.println("dest2" + dest2);
-        String s1 = String.valueOf(dest1);
-        String s2 = String.valueOf(dest2);
-        String dest = s1 + "_" + s2;
+        frameByte[4] = 0b00000011;
+        if (clients.containsKey(frameByte[1] >> 4)) {
+            clients.get(frameByte[1] >> 4).write(frameByte);
+        }
 
-        Frame ackFrame = new Frame(switchID, 0, 3, dest+ ":");
-        System.out.println("ACKFRAME SIZE: " + ackFrame.getSize());
-        byte[] ackBytes = Frame.encode(ackFrame);
-        //System.out.println((int) ackBytes[0] + " ACK DEST");
-        Integer destination = (int) ackBytes[0];
-        if(clients.containsKey(destination)){
-            System.out.println("MEMBER Present " + destination);
-            clients.get(destination).write(frameByte);
-            System.out.println("SENT ACK");
-        }
-        else{
-            System.out.println("MEMBER not Present " + ackBytes[0]);
-            //link.write(ackBytes);
-        }
+//        //System.out.println("Source " +frameByte[1]);
+//        int dest1 = frameByte[1] & 0b11110000;
+//        //System.out.println("dest1" + dest1);
+//        int dest2 = frameByte[1] & 0b00001111;
+//        //System.out.println("dest2" + dest2);
+//        String s1 = String.valueOf(dest1);
+//        String s2 = String.valueOf(dest2);
+//        String dest = s1 + "_" + s2;
+//
+//        Frame ackFrame = new Frame(switchID, 0, 3, dest+ ":ACK");
+////        System.out.println("ACKFRAME SIZE: " + ackFrame.getSize());
+//        byte[] ackBytes = Frame.encode(ackFrame);
+//        //System.out.println((int) ackBytes[0] + " ACK DEST");
+//        Integer destination = (int) ackBytes[0];
+//        if(clients.containsKey(destination)){
+////            System.out.println("MEMBER Present " + destination);
+//            clients.get(destination).write(frameByte);
+////            System.out.println("SENT ACK");
+//        }
+//        else{
+//            System.out.println("MEMBER not Present " + ackBytes[0]);
+//            //link.write(ackBytes);
+//        }
 
     }
 }
