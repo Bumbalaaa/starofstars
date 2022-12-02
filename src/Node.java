@@ -86,7 +86,7 @@ public class Node {
                         case 2:
                         case 3:
                         case 4:
-                            System.out.println("SET FLAG TO ALL GOOD");
+                            System.out.println("SET FLAG TO ALL GOOD " + this.nodeID );
                             setReaderWaitFlag(1);
                             break;
                         case 123:
@@ -158,7 +158,7 @@ public class Node {
                 int timeout = 0;
                 --maxTX;
                 while (this.readerWaitFlag == 0) {
-                    //System.out.println("IN 0 FLAG");
+                    System.out.println("IN 0 FLAG");
                     if (timeout >= TIMEOUT_DELAY || maxTX <= 0) {
                         System.out.println("Node " + this.casID + "_" + this.nodeID + " Error: Timed out");
                         break;

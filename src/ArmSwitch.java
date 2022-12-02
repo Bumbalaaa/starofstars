@@ -211,8 +211,13 @@ public class ArmSwitch implements Runnable {
         }
 
         frameByte[4] = 0b00000011;
-        if (clients.containsKey(frameByte[1] >> 4)) {
-            clients.get(frameByte[1] >> 4).write(frameByte);
+
+        frameByte[0] = frameByte[1];
+        frameByte[1] = 0b00000000;
+        Integer destination = (int) frameByte[0];
+        if (clients.containsKey(destination)){
+            System.out.println("SENDING ACK");
+            clients.get(destination).write(frameByte);
         }
 
 //        //System.out.println("Source " +frameByte[1]);
