@@ -84,13 +84,14 @@ public class CoreSwitch implements Runnable {
                                     } else {
                                         frame[4] = 0b00000100; // sets ack type to no return needed
                                         System.out.println("Core flooding frame");
-                                        for (CASLink armSwitch : unknownSwitches) {
-                                            armSwitch.write(frame);
-                                        }
-
-                                        for (CASLink armSwitch : switches.values()) {
-                                            armSwitch.write(frame);
-                                        }
+                                        flood(frame);
+//                                        for (CASLink armSwitch : unknownSwitches) {
+//                                            armSwitch.write(frame);
+//                                        }
+//
+//                                        for (CASLink armSwitch : switches.values()) {
+//                                            armSwitch.write(frame);
+//                                        }
                                     }
                                 }
                             }
@@ -181,6 +182,16 @@ public class CoreSwitch implements Runnable {
 
         } catch (IOException e) {
             System.out.println("Firewall read error.");
+        }
+    }
+
+    public void flood(byte[] frame){
+        for (CASLink armSwitch : unknownSwitches) {
+            armSwitch.write(frame);
+        }
+
+        for (CASLink armSwitch : switches.values()) {
+            armSwitch.write(frame);
         }
     }
 }

@@ -61,6 +61,7 @@ public class Node {
             if (in.available() > 0) {
                 byte[] buffer = new byte[1024];
                 in.read(buffer);
+                System.out.println("RECEIVED FRAME " + this.nodeID);
                 Frame frame = Frame.decode(buffer);
 
                 //If CRC is wrong, ask for retransmission
@@ -70,15 +71,18 @@ public class Node {
                     out.write(bytes);
                     continue;
                 }
-
+                //System.out.println("CRC VERIFIED");
                 //Check if frame is an ACK response (or ACK type value that we've hijacked)
+                System.out.println("SIZE " + frame.getSize());
                 if (frame.getSize() == 0) {
+                    System.out.println("GOT ACK");
                     switch (frame.getAck()) {
                         case 1:
                             setReaderWaitFlag(2);
                             break;
                         case 2:
                         case 3:
+                            System.out.println("SET FLAG TO ALL GOOD");
                             setReaderWaitFlag(1);
                             break;
                         case 255:
@@ -94,10 +98,23 @@ public class Node {
 
                     //Check if frame has been flooded, if so, no ACK necessary
                     if (frame.getAck() != 4) {
-                        Frame ackFrame = new Frame(this.casID, this.nodeID, 3, this.fullSrcID + ":");
-                        byte[] bytes = Frame.encode(ackFrame);
-                        out.write(bytes);
+//                        Frame ackFrame = new Frame(this.casID, this.nodeID, 3, this.fullSrcID + ":");
+//                        byte[] bytes = Frame.encode(ackFrame);
+//                        out.write(bytes);
+
+                        int dest1 = buffer[1] & 0b11110000;
+                        //System.out.println("dest1" + dest1);
+                        int dest2 = buffer[1] & 0b00001111;
+                        //System.out.println("dest2" + dest2);
+                        String s1 = String.valueOf(dest1);
+                        String s2 = String.valueOf(dest2);
+                        String dest = s1 + "_" + s2;
+
+                        Frame ackFrame = new Frame(this.casID, this.nodeID, 3, dest+ ":");
+                        byte[] ackBytes = Frame.encode(ackFrame);
+                        out.write(ackBytes);
                     }
+                    System.out.println("FLOODED FRAME");
                 }
             }
         } //Loop - Listen for messages
@@ -114,30 +131,35 @@ public class Node {
         Scanner fileReader = new Scanner(new File("node" + this.casID + "_" + this.nodeID + ".txt"));
 
         try {
-            Thread.sleep(1000);
+            Thread.sleep(2000);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
 
         while (fileReader.hasNextLine()) {
+            System.out.println("READER Has NEXT LINE");
             Frame frame = new Frame(this.casID, this.nodeID, 0, fileReader.nextLine());
 
             //Send message, wait for ACK, if retransmit (wait flag set to 2), then repeat up to maxTX times
             //bytes are re-encoded in case CRC error is on this end
             int maxTX = 5;
             do {
+                System.out.println("IN TIMEOUT LOOP");
                 byte[] bytes = Frame.encode(frame);
                 out.write(bytes);
                 setReaderWaitFlag(0);
                 int timeout = 0;
                 --maxTX;
                 while (this.readerWaitFlag == 0) {
+                    //System.out.println("IN 0 FLAG");
                     if (timeout >= TIMEOUT_DELAY || maxTX <= 0) {
                         System.out.println("Node " + this.casID + "_" + this.nodeID + " Error: Timed out");
                         break;
                     }
                 }
+                System.out.println("OUT OF 0 FLAG");
             } while (this.readerWaitFlag == 2);
+            System.out.println("OUT OF TIMEOUT LOOP");
         }
 
         //Send end signal

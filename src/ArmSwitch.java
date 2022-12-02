@@ -152,12 +152,13 @@ public class ArmSwitch implements Runnable {
                                             if (this.switchID != frameByte[1] >> 4) link.write(frameByte);
                                             else {
                                                 frameByte[4] = 0b00000100;
-                                                for (ClientLink client : clients.values()) {
-                                                    client.write(frameByte);
-                                                }
-                                                for (ClientLink client : unknownClients) {
-                                                    client.write(frameByte);
-                                                }
+                                                flood(frameByte);
+//                                                for (ClientLink client : clients.values()) {
+//                                                    client.write(frameByte);
+//                                                }
+//                                                for (ClientLink client : unknownClients) {
+//                                                    client.write(frameByte);
+//                                                }
                                             }
                                         }
                                     }
@@ -191,5 +192,38 @@ public class ArmSwitch implements Runnable {
 
     public synchronized void addClient(ClientLink client) {
         unknownClients.add(client);
+    }
+    public void flood(byte[] frameByte){
+        for (ClientLink client : clients.values()) {
+            client.write(frameByte);
+        }
+        for (ClientLink client : unknownClients) {
+            client.write(frameByte);
+        }
+
+        //System.out.println("Source " +frameByte[1]);
+        int dest1 = frameByte[1] & 0b11110000;
+        //System.out.println("dest1" + dest1);
+        int dest2 = frameByte[1] & 0b00001111;
+        //System.out.println("dest2" + dest2);
+        String s1 = String.valueOf(dest1);
+        String s2 = String.valueOf(dest2);
+        String dest = s1 + "_" + s2;
+
+        Frame ackFrame = new Frame(switchID, 0, 3, dest+ ":");
+        System.out.println("ACKFRAME SIZE: " + ackFrame.getSize());
+        byte[] ackBytes = Frame.encode(ackFrame);
+        //System.out.println((int) ackBytes[0] + " ACK DEST");
+        Integer destination = (int) ackBytes[0];
+        if(clients.containsKey(destination)){
+            System.out.println("MEMBER Present " + destination);
+            clients.get(destination).write(frameByte);
+            System.out.println("SENT ACK");
+        }
+        else{
+            System.out.println("MEMBER not Present " + ackBytes[0]);
+            //link.write(ackBytes);
+        }
+
     }
 }

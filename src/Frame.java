@@ -113,6 +113,7 @@ public class Frame {
         Frame frame = new Frame(casSrc, nodeSrc, ack, data);
         frame.crcVerified = crcVerified;
         frame.size = messageBytes.length;
+        System.out.println("MessageBytes: " + messageBytes[3]);
         return frame;
     }
 
