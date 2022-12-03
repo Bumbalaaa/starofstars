@@ -36,12 +36,11 @@ public class CoreSwitch implements Runnable {
             byte[] frame;
             synchronized (frameBuffer) {
                 if (!frameBuffer.isEmpty()) {
-                    System.out.println("Core received frame");
                     frame = frameBuffer.remove(0);
-                    Frame dataframe = Frame.decode(frame);
-                    System.out.println("DATA received is " + dataframe.getData() + "\n");
-                    boolean allowFrame = true;
+
                     if (frame != null) {
+                        System.out.println("Core received frame: \"" + ArmSwitch.getData(frame) + "\"");
+                        int dest = frame[0] >> 4;
                         //If ack type is end signal, check if all other switches have sent end signal, if so, flood end signal back to all nodes
                         if (frame[4] == 123) {
                             completedSwitches++;
@@ -63,29 +62,34 @@ public class CoreSwitch implements Runnable {
                                 this.isRunning = false;
                                 this.acceptor.closeServer();
                             }
+                        } else if (frame[4] == 2) {
+                            if (switches.containsKey(dest)) {
+                                switches.get(dest).write(frame);
+                            } else {
+                                System.out.println("Line 69 Error: Source switch unknown, can't send firewalled ack. Something is wrong");
+                            }
                         } else {
                             //firewall check
+                            boolean firewalled = false;
                             for (int blockedSwitch : blockedSwitches) {
-                                if (frame[0] >> 4 == blockedSwitch) allowFrame = false;
+                                if (dest == blockedSwitch) firewalled = true;
                             }
 
-                            if (!allowFrame) {
+                            if (firewalled) {
                                 frame[0] = frame[1]; // Makes destination the source.
                                 frame[3] = 0b00000000; // sets size byte to zero to show it's an ack
                                 frame[4] = 0b00000010; // sets ack type to firewalled
 
                                 synchronized (switches) {
-                                    if (switches.containsKey(frame[0])) {
+                                    if (switches.containsKey(dest)) {
                                         System.out.println("Global frame firewalled, sending back");
-                                        switches.get(frame[0]).write(frame);
+                                        switches.get(dest).write(frame);
                                     } else {
                                         System.out.println("Error: Arm switch source unknown. How did this even happen");
                                     }
                                 }
                             } else {
                                 synchronized (switches) {
-                                    Integer dest = (int) frame[0] >> 4;
-                                    //if (switches.containsKey(frame[0] >> 4)) {
                                     if (switches.containsKey(dest)){
                                         System.out.println("Core sending frame to arm");
 
@@ -94,18 +98,20 @@ public class CoreSwitch implements Runnable {
                                         } else {
                                             System.out.println("CAS Instance returned null");
                                         }
-                                        //TODO - Figure out why this could be null, especially since the above if statement checks if the object exists - debugger even shows it as populated
                                     } else {
                                         frame[4] = 0b00000100; // sets ack type to no return needed
                                         System.out.println("Core flooding frame");
                                         flood(frame);
-//                                        for (CASLink armSwitch : unknownSwitches) {
-//                                            armSwitch.write(frame);
-//                                        }
-//
-//                                        for (CASLink armSwitch : switches.values()) {
-//                                            armSwitch.write(frame);
-//                                        }
+
+                                        //Send ack back to src
+                                        frame[4] = 0b00000011;
+                                        frame[0] = frame[1];
+                                        if (switches.containsKey(frame[0] >> 4)) {
+                                            System.out.println("Core sending ack back from flooded frame to switch " + (frame[0] >> 4));
+                                            switches.get(frame[0] >> 4).write(frame);
+                                        } else {
+                                            System.out.println("Line 112 Error: Source switch unknown, can't send  firewalled ack. Something is wrong");
+                                        }
                                     }
                                 }
                             }
@@ -132,9 +138,8 @@ public class CoreSwitch implements Runnable {
     public void incomingFrame(byte[] bytes, CASLink armLink) {
         synchronized (switches) {
             if (!switches.containsKey(bytes[1] >> 4)) {
-//                System.out.println("Core found new switch, adding to list");
-                Integer src = (int) bytes[1];
-                switches.put(src, armLink);
+                System.out.println("Core registered new switch, ID: " + (bytes[1] >> 4));
+                switches.put(bytes[1] >> 4, armLink);
                 unknownSwitches.remove(armLink);
             }
         }
@@ -150,11 +155,7 @@ public class CoreSwitch implements Runnable {
      */
     public synchronized void addSwitch(CASLink armSwitch) {
         unknownSwitches.add(armSwitch);
-        try {
-            Thread.sleep(500);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+        delay(500);
         armSwitch.write(firewallPacket);
     }
 
@@ -200,13 +201,21 @@ public class CoreSwitch implements Runnable {
         }
     }
 
-    public void flood(byte[] frame){
+    private void flood(byte[] frame){
         for (CASLink armSwitch : unknownSwitches) {
             armSwitch.write(frame);
         }
 
         for (CASLink armSwitch : switches.values()) {
             armSwitch.write(frame);
+        }
+    }
+
+    private static void delay(int millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
     }
 }

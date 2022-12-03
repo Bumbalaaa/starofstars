@@ -33,7 +33,7 @@ public class SwitchAcceptor implements Runnable {
             serverSocket = new ServerSocket(port);
             while (coreSwitch.isRunning()) {
                 Socket newSwitch = serverSocket.accept();
-                System.out.println("Core switch accepted new client");
+//                System.out.println("Core switch accepted new client");
                 coreSwitch.addSwitch(new CASLink(newSwitch, coreSwitch));
             }
         } catch (IOException e) {

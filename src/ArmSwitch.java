@@ -35,7 +35,7 @@ public class ArmSwitch implements Runnable {
         this.switchID = switchID;
         try {
             this.ccsLink = new Socket("localhost", 5000);
-            System.out.println("Arm Switch " + this.switchID + ": Connecting to central switch");
+//            System.out.println("Arm Switch " + this.switchID + ": Connecting to central switch");
         } catch (IOException e) {
             System.out.println("Arm Switch " + this.switchID + ": Error connecting to central switch");
             e.printStackTrace();
@@ -48,55 +48,65 @@ public class ArmSwitch implements Runnable {
 
     public void run() {
         while(isRunning){
-            byte[] frameByte = null;
+            byte[] frame = null;
             synchronized (localBuffer) {
                 if (!localBuffer.isEmpty()) {
-                    frameByte = localBuffer.remove(0);
+                    frame = localBuffer.remove(0);
 
                     boolean CTS = true;
-                    if (frameByte != null) {
+                    if (frame != null) {
+                        String data = getData(frame);
+
                         //check if ack type denotes firewall table, if so load, otherwise process normally
-                        if (frameByte[4] == 5) {
-                            for (int i = 5; i < 5 + frameByte[3]; i++) {
-                                this.firewall.add((int) frameByte[i]);
+                        if (frame[4] == 5) {
+                            for (int i = 5; i < 5 + frame[3]; i++) {
+                                this.firewall.add((int) frame[i]);
                             }
                         //check if ack type denotes end signal, if so forward to core switch
-                        } else if (frameByte[4] == 123) {
+                        } else if (frame[4] == 123) {
                             if (++completedClients >= unknownClients.size() + clients.size()) {
                                 System.out.println("ARM " + this.switchID + " SENDING END TO CORE --------------------------------------------");
-                                link.write(frameByte);
+                                link.write(frame);
                             }
                         } else {
                             for (int blockedNode : firewall) {
-                                if (frameByte[0] == blockedNode)
+                                if (frame[0] == blockedNode)
                                     CTS = false;
                             }
                             if (!CTS) {
-                                frameByte[0] = frameByte[1]; // Makes destination the source.
-                                frameByte[3] = 0b00000000; // sets size byte to zero to show it's an ack
-                                frameByte[4] = 0b00000010; // sets ack type to firewalled
+                                frame[0] = frame[1]; // Makes destination the source.
+                                frame[3] = 0b00000000; // sets size byte to zero to show it's an ack
+                                frame[4] = 0b00000010; // sets ack type to firewalled
                                 synchronized (clients) {
-                                    if (clients.containsKey(frameByte[0])) {
+                                    if (clients.containsKey(frame[0])) {
                                         System.out.println("Message blocked by firewall");
-                                        clients.get(frameByte[0]).write(frameByte);
+                                        clients.get(frame[0]).write(frame);
                                     }
                                 }
                             } else {
                                 synchronized (clients) {
                                     //if dest is known send there, else global/flood
-                                    if (clients.containsKey(frameByte[0])) {
-                                        System.out.println("Sending frame");
-                                        clients.get(frameByte[0]).write(frameByte);
+                                    if (clients.containsKey(frame[0])) {
+                                        System.out.println("Sending local frame to node");
+                                        clients.get(frame[0]).write(frame);
                                     } else {
                                         //if dest cas isnt this cas, send to global, else mark ack as flood, then send to global and flood
                                         //shouldn't interfere with ack messages since ack messages should never be targeting unknown nodes
-                                        if (!(frameByte[0] >> 4 == this.switchID)) {
-                                            System.out.println("Sending frame to global");
-                                            link.write(frameByte);
+                                        if (!(frame[0] >> 4 == this.switchID)) {
+                                            System.out.println("Switch " + this.switchID + " sending local frame to global: \"" + data + "\"");
+                                            link.write(frame);
                                         } else {
-                                            frameByte[4] = 0b00000100;
-                                            System.out.println("Arm Flooding frame");
-                                            this.flood(frameByte);
+                                            frame[4] = 0b00000100;
+                                            System.out.println("Switch " + this.switchID + " flooding local frame");
+                                            flood(frame);
+
+                                            frame[4] = 0b00000011;
+                                            frame[0] = frame[1];
+                                            int srcNode = frame[0] & 0b00001111;
+                                            System.out.println("Switch " + this.switchID + " sending ack from flooded frame to node " + srcNode);
+                                            if (clients.containsKey(srcNode)) {
+                                                clients.get(srcNode).write(frame);
+                                            }
                                         }
                                     }
                                 }
@@ -108,67 +118,66 @@ public class ArmSwitch implements Runnable {
 
             synchronized (globalBuffer){
                 if(!globalBuffer.isEmpty()){
-                    frameByte = globalBuffer.remove(0);
+                    frame = globalBuffer.remove(0);
+                    if (frame != null) {
+                        int ackType = frame[4];
+                        int destNode = frame[0] & 0b00001111;
+                        int destSwitch = frame[0] >> 4;
 
-                    boolean allowFrame = true;
-                    if (frameByte != null) {
-                        //check if ack type denotes firewall table, if so load, otherwise process normally
-                        if (frameByte[4] == 5) {
-                            for (int i = 5; i < 5 + frameByte[3]; i++) {
-                                this.firewall.add((int) frameByte[i]);
+                        if (ackType == 5) { //check if ack type denotes firewall table, if so load, otherwise process normally
+                            for (int i = 5; i < 5 + frame[3]; i++) {
+                                this.firewall.add((int) frame[i]);
+                            }
+                        } else if (ackType == 4) { //check if global is flooding
+                            System.out.println("Switch " + this.switchID + " flooding global frame");
+                            this.flood(frame);
+                        } else if (ackType == 123) { //Final end flag received from global. Forward to nodes then shut down
+                            for (ClientLink client : clients.values()) {
+                                client.write(frame);
+                            }
+                            for (ClientLink client : unknownClients) { //This shouldn't ever execute, can't get an end flag from an unknown client
+                                client.write(frame);
+                            }
+
+                            delay(200);
+                            this.isRunning = false;
+                            this.acceptor.closeServer();
+                        } else if (ackType == 2) {
+                            if (clients.containsKey(destNode)) {
+                                clients.get(destNode).write(frame);
+                            } else {
+                                System.out.println("CAS " + this.switchID + ": Source node unknown, can't send ack. Something is wrong");
                             }
                         } else {
-                            if (frameByte[4] == 123) {
-                                for (ClientLink client : clients.values()) {
-                                    client.write(frameByte);
+                            boolean fireWalled = false;
+                            for (int blockedNode : firewall) { //Check if node is in firewall
+                                if (destNode == blockedNode) {
+                                    fireWalled = true;
+                                    break;
                                 }
-                                for (ClientLink client : unknownClients) {
-                                    client.write(frameByte);
-                                }
+                            }
+                            if (fireWalled) {
+                                frame[0] = frame[1]; // Makes destination the source.
+                                frame[3] = 0b00000000; // sets size byte to zero to show it's an ack
+                                frame[4] = 0b00000010; // sets ack type to firewalled
 
-                                try {
-                                    Thread.sleep(200);
-                                } catch (InterruptedException e) {
-                                    e.printStackTrace();
-                                }
-                                this.isRunning = false;
-                                this.acceptor.closeServer();
+                                link.write(frame); //send back up to core arm switch for redistribution
                             } else {
-                                for (int blockedNode : firewall) {
-                                    if (frameByte[0] == blockedNode)
-                                        allowFrame = false;
-                                }
-                                if (!allowFrame) {
-                                    frameByte[0] = frameByte[1]; // Makes destination the source.
-                                    frameByte[3] = 0b00000000; // sets size byte to zero to show it's an ack
-                                    frameByte[4] = 0b00000010; // sets ack type to firewalled
-//                                synchronized (clients) {
-//                                    if (clients.containsKey(frameByte[0])) {
-//                                        clients.get(frameByte[0]).write(frameByte);
-//                                    }
-//                                }
+                                synchronized (clients) {
+                                    //if dest is known send there, else global/flood
+                                    if (clients.containsKey(destNode)) {
+                                        clients.get(destNode).write(frame);
+                                    } else {
+                                        //if dest switch is not this switch, send to global. Else, flood and send back ack.
+                                        if (this.switchID != destSwitch) link.write(frame);
+                                        else {
+                                            frame[4] = 0b00000100;
+                                            flood(frame);
 
-                                    //send back up to core arm switch for redistribution
-                                    link.write(frameByte);
-                                } else {
-                                    synchronized (clients) {
-                                        //if dest is known send there, else global/flood
-                                        if (clients.containsKey(frameByte[0])) {
-                                            clients.get(frameByte[0]).write(frameByte);
-                                        } else {
-                                            //if no unknown clients, send to global, else mark ack as flood, then send to global and flood
-                                            //shouldn't interfere with ack messages since ack messages should never be targeting unknown nodes
-                                            if (this.switchID != frameByte[1] >> 4) link.write(frameByte);
-                                            else {
-                                                frameByte[4] = 0b00000100;
-                                                flood(frameByte);
-//                                                for (ClientLink client : clients.values()) {
-//                                                    client.write(frameByte);
-//                                                }
-//                                                for (ClientLink client : unknownClients) {
-//                                                    client.write(frameByte);
-//                                                }
-                                            }
+                                            frame[4] = 0b00000011;
+
+                                            frame[0] = frame[1];
+                                            link.write(frame);
                                         }
                                     }
                                 }
@@ -182,8 +191,10 @@ public class ArmSwitch implements Runnable {
 
     public void incomingLocal(byte[] bytes, ClientLink client) {
         synchronized (clients) {
-            if (!clients.containsKey(bytes[1])) {
-                clients.put((int) bytes[1], client);
+            int srcNode = bytes[1] & 0b00001111;
+            if (!clients.containsKey(srcNode)) {
+                System.out.println("Switch " + this.switchID + " registered new node, ID: " + srcNode);
+                clients.put(srcNode, client);
                 unknownClients.remove(client);
             }
         }
@@ -202,47 +213,29 @@ public class ArmSwitch implements Runnable {
     public synchronized void addClient(ClientLink client) {
         unknownClients.add(client);
     }
-    public void flood(byte[] frameByte){
+
+    private void flood(byte[] frame){
         for (ClientLink client : clients.values()) {
-            client.write(frameByte);
+            client.write(frame);
         }
         for (ClientLink client : unknownClients) {
-            client.write(frameByte);
+            client.write(frame);
         }
+    }
 
-        frameByte[4] = 0b00000011;
-
-        frameByte[0] = frameByte[1];
-        frameByte[1] = 0b00000000;
-        Integer destination = (int) frameByte[0];
-        if (clients.containsKey(destination)){
-            System.out.println("SENDING ACK");
-            clients.get(destination).write(frameByte);
+    private static void delay(int millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
+    }
 
-//        //System.out.println("Source " +frameByte[1]);
-//        int dest1 = frameByte[1] & 0b11110000;
-//        //System.out.println("dest1" + dest1);
-//        int dest2 = frameByte[1] & 0b00001111;
-//        //System.out.println("dest2" + dest2);
-//        String s1 = String.valueOf(dest1);
-//        String s2 = String.valueOf(dest2);
-//        String dest = s1 + "_" + s2;
-//
-//        Frame ackFrame = new Frame(switchID, 0, 3, dest+ ":ACK");
-////        System.out.println("ACKFRAME SIZE: " + ackFrame.getSize());
-//        byte[] ackBytes = Frame.encode(ackFrame);
-//        //System.out.println((int) ackBytes[0] + " ACK DEST");
-//        Integer destination = (int) ackBytes[0];
-//        if(clients.containsKey(destination)){
-////            System.out.println("MEMBER Present " + destination);
-//            clients.get(destination).write(frameByte);
-////            System.out.println("SENT ACK");
-//        }
-//        else{
-//            System.out.println("MEMBER not Present " + ackBytes[0]);
-//            //link.write(ackBytes);
-//        }
-
+    public static String getData(byte[] frame) {
+        String data = "";
+        for (int i = 5; i < 5 + frame[3]; i++) {
+            data += (char) frame[i];
+        }
+        return data;
     }
 }

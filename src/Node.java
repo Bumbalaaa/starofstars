@@ -35,7 +35,7 @@ public class Node {
         try {
             Thread.sleep(100);
             this.socket = new Socket("localhost", 1000 + this.casID);
-            System.out.println("Node " + this.casID + "_" + this.nodeID + ": Connecting to port " + (1000 + this.casID));
+//            System.out.println("Node " + this.casID + "_" + this.nodeID + ": Connecting to port " + (1000 + this.casID));
         } catch (IOException | InterruptedException e) {
             System.out.println("Node " + this.casID + "_" + this.nodeID + ": Connection refused.");
             e.printStackTrace();
@@ -61,7 +61,7 @@ public class Node {
             if (in.available() > 0) {
                 byte[] buffer = new byte[1024];
                 in.read(buffer);
-                System.out.println("RECEIVED FRAME " + this.nodeID);
+//                System.out.println("RECEIVED FRAME " + this.nodeID);
                 if (buffer[4] == 123) {
                     System.out.println("End signal received");
                 }
@@ -74,11 +74,11 @@ public class Node {
                     out.write(bytes);
                     continue;
                 }
-                //System.out.println("CRC VERIFIED");
+
                 //Check if frame is an ACK response (or ACK type value that we've hijacked)
-                System.out.println("SIZE " + frame.getSize());
+//                System.out.println("SIZE " + frame.getSize());
                 if (!(frame.getAck() == 0b00000111 || frame.getAck() == 0b00000100)) {
-                    System.out.println("GOT ACK");
+//                    System.out.println("GOT ACK");
                     switch (frame.getAck()) {
                         case 1:
                             setReaderWaitFlag(2);
@@ -86,7 +86,7 @@ public class Node {
                         case 2:
                         case 3:
                         case 4:
-                            System.out.println("SET FLAG TO ALL GOOD " + this.nodeID );
+//                            System.out.println("SET FLAG TO ALL GOOD " + this.nodeID );
                             setReaderWaitFlag(1);
                             break;
                         case 123:
@@ -120,7 +120,7 @@ public class Node {
                         System.out.println("Sending ACK");
                         out.write(ackBytes);
                     } else {
-                        System.out.println("FLOODED FRAME");
+//                        System.out.println("FLOODED FRAME");
                     }
                 }
             }
@@ -165,7 +165,7 @@ public class Node {
                         break;
                     }
                 }
-//                System.out.println("OUT OF 0 FLAG");
+                System.out.println("Node " + this.casID + "_" + this.nodeID + ": Received ACK for message - \"" + frame.getData() + "\"");
             } while (this.readerWaitFlag == 2);
 //            System.out.println("OUT OF TIMEOUT LOOP");
         }

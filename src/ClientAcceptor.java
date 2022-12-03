@@ -32,10 +32,10 @@ public class ClientAcceptor implements Runnable {
     public void run() {
         try {
             this.serverSocket = new ServerSocket(port);
-            System.out.println("Cas " + (port - 1000) + " listening on port " + port);
+//            System.out.println("Cas " + (port - 1000) + " listening on port " + port);
             while (armSwitch.isRunning()) {
                 Socket newClient = serverSocket.accept();
-                System.out.println("Cas " + (port - 1000) + " accepted new client");
+//                System.out.println("Cas " + (port - 1000) + " accepted new client");
                 armSwitch.addClient(new ClientLink(newClient, armSwitch));
             }
         } catch (IOException e) {
