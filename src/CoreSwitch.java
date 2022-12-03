@@ -38,7 +38,8 @@ public class CoreSwitch implements Runnable {
                 if (!frameBuffer.isEmpty()) {
                     System.out.println("Core received frame");
                     frame = frameBuffer.remove(0);
-
+                    Frame dataframe = Frame.decode(frame);
+                    System.out.println("DATA received is " + dataframe.getData() + "\n");
                     boolean allowFrame = true;
                     if (frame != null) {
                         //If ack type is end signal, check if all other switches have sent end signal, if so, flood end signal back to all nodes
@@ -83,9 +84,11 @@ public class CoreSwitch implements Runnable {
                                 }
                             } else {
                                 synchronized (switches) {
-                                    if (switches.containsKey(frame[0] >> 4)) {
+                                    Integer dest = (int) frame[0] >> 4;
+                                    //if (switches.containsKey(frame[0] >> 4)) {
+                                    if (switches.containsKey(dest)){
                                         System.out.println("Core sending frame to arm");
-                                        Integer dest = (int) frame[0] >> 4;
+
                                         if (switches.get(dest) != null) {
                                             switches.get(dest).write(frame);
                                         } else {
