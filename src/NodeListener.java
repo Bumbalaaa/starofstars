@@ -34,8 +34,6 @@ public class NodeListener implements Runnable {
             else this.node.transmit();
         } catch (IOException e) {
             e.printStackTrace();
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
         }
     }
 }

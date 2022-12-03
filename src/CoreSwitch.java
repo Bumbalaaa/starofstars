@@ -4,6 +4,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Scanner;
 
+/**
+ * <h3>CoreSwitch class of Star of Stars project</h3>
+ * The core switch routes traffic between switches and loads/distributes a predefined firewall table.
+ *
+ * @author Ethan Coulthurst
+ * @author Antonio Arant
+ */
 public class CoreSwitch implements Runnable {
     private boolean isRunning = true;
     private ArrayList<CASLink> unknownSwitches;
@@ -16,7 +23,7 @@ public class CoreSwitch implements Runnable {
     private SwitchAcceptor acceptor;
 
     /**
-     * Creates a new core switch and loads firewall table
+     * Creates a new core switch and loads firewall table. Creates a SwitchAcceptor object to listen for new arm switch connections
      */
     public CoreSwitch() {
         this.unknownSwitches = new ArrayList<>();
@@ -31,34 +38,26 @@ public class CoreSwitch implements Runnable {
         new Thread(this).start(); //Reminder: for the love of god, stop forgetting to include this line
     }
 
+    /**
+     * Switching loop
+     */
     public void run() {
         while (isRunning) {
-            byte[] frame;
             synchronized (frameBuffer) {
                 if (!frameBuffer.isEmpty()) {
-                    frame = frameBuffer.remove(0);
+                    byte[] frame = frameBuffer.remove(0);
 
                     if (frame != null) {
-                        System.out.println("Core received frame: \"" + ArmSwitch.getData(frame) + "\"");
+                        System.out.println("Core received frame: \"" + getData(frame) + "\"");
                         int dest = frame[0] >> 4;
                         //If ack type is end signal, check if all other switches have sent end signal, if so, flood end signal back to all nodes
                         if (frame[4] == 123) {
                             completedSwitches++;
                             if (completedSwitches >= unknownSwitches.size() + switches.size()) {
                                 System.out.println("Core sending end signal");
-                                for (CASLink armSwitch : unknownSwitches) {
-                                    armSwitch.write(frame);
-                                }
+                                flood(frame);
 
-                                for (CASLink armSwitch : switches.values()) {
-                                    armSwitch.write(frame);
-                                }
-
-                                try {
-                                    Thread.sleep(200);
-                                } catch (InterruptedException e) {
-                                    e.printStackTrace();
-                                }
+                                delay(200);
                                 this.isRunning = false;
                                 this.acceptor.closeServer();
                             }
@@ -143,7 +142,7 @@ public class CoreSwitch implements Runnable {
                 unknownSwitches.remove(armLink);
             }
         }
-//        System.out.println("Core adding frame to buffer");
+
         synchronized (frameBuffer) {
             frameBuffer.add(bytes);
         }
@@ -168,7 +167,7 @@ public class CoreSwitch implements Runnable {
             while (fileReader.hasNextLine()) {
                 String[] newRule = fileReader.nextLine().split(":");
                 //Check for firewall rule: local -- no other firewall rules i guess but checking anyway
-                if (newRule[1].equalsIgnoreCase("local")) {
+                if (newRule[1].equalsIgnoreCase(" local")) {
                     //Check if firewall rule is for switch or specific node. If switch, add the number before the _ to the list
                     //Else, add both numbers compressed into 1 byte to the list
                     if (newRule[0].charAt(2) == '#') blockedSwitches.add(Integer.parseInt(newRule[0].split("_")[0]));
@@ -201,6 +200,10 @@ public class CoreSwitch implements Runnable {
         }
     }
 
+    /**
+     * Floods given frame to all known and unknown switches
+     * @param frame Formatted data frame
+     */
     private void flood(byte[] frame){
         for (CASLink armSwitch : unknownSwitches) {
             armSwitch.write(frame);
@@ -211,11 +214,28 @@ public class CoreSwitch implements Runnable {
         }
     }
 
+    /**
+     * Halts thread for specified amount of time in millis
+     * @param millis Amount of delay time in milliseconds
+     */
     private static void delay(int millis) {
         try {
             Thread.sleep(millis);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
+    }
+
+    /**
+     * Gets data section of frame for debugging purposes
+     * @param frame Formatted data frame
+     * @return Message component of frame as a string
+     */
+    private static String getData(byte[] frame) {
+        String data = "";
+        for (int i = 5; i < 5 + frame[3]; i++) {
+            data += (char) frame[i];
+        }
+        return data;
     }
 }

@@ -31,14 +31,6 @@ public class Frame {
         this.data = data;
     }
 
-    //FRAME FORMAT: [DST][SRC][CRC][SIZE/ACK][ACK type][data]
-    /*  ACK:
-    00 No response (ReTX)
-    01 CRC Error (ReTX)
-    10 Firewall (No TX)
-    11 Positive ACK
-    */
-
     /**
      * Encodes a frame object into a byte[] ready to be sent over a Socket
      * @param frame Frame to encode
@@ -113,24 +105,8 @@ public class Frame {
         Frame frame = new Frame(casSrc, nodeSrc, ack, data);
         frame.crcVerified = true;
         frame.size = messageBytes.length;
-//        System.out.println("MessageBytes: " + messageBytes[3]);
+
         return frame;
-    }
-
-    /**
-     * Get arm switch source ID
-     * @return ID
-     */
-    public int getCasSrc() {
-        return casSrc;
-    }
-
-    /**
-     * Get node source ID
-     * @return ID
-     */
-    public int getNodeSrc() {
-        return nodeSrc;
     }
 
     /**
@@ -156,14 +132,5 @@ public class Frame {
      */
     public boolean isCrcVerified() {
         return crcVerified;
-    }
-
-    /**
-     * Get size of last decoded message (not including source header x_y:)
-     * This field is not set on user-created frames
-     * @return ID
-     */
-    public int getSize() {
-        return size;
     }
 }

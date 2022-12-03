@@ -8,10 +8,8 @@
  */
 public class Main {
     public static void main(String[] args) {
-//        int nodeAmt = Integer.parseInt(args[1]);
-//        int armSwitchAmt = Integer.parseInt(args[0]);
-        int nodeAmt = 3;
-        int armSwitchAmt = 2;
+        int nodeAmt = Integer.parseInt(args[1]);
+        int armSwitchAmt = Integer.parseInt(args[0]);
 
         if (nodeAmt < 2 || nodeAmt > 8) {
             System.out.println("Node per arm amount (" + nodeAmt + ") must be between 2 and 8");

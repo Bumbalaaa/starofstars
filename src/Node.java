@@ -35,7 +35,7 @@ public class Node {
         try {
             Thread.sleep(100);
             this.socket = new Socket("localhost", 1000 + this.casID);
-//            System.out.println("Node " + this.casID + "_" + this.nodeID + ": Connecting to port " + (1000 + this.casID));
+            System.out.println("Node " + this.casID + "_" + this.nodeID + ": Connecting to port " + (1000 + this.casID));
         } catch (IOException | InterruptedException e) {
             System.out.println("Node " + this.casID + "_" + this.nodeID + ": Connection refused.");
             e.printStackTrace();
@@ -61,7 +61,6 @@ public class Node {
             if (in.available() > 0) {
                 byte[] buffer = new byte[1024];
                 in.read(buffer);
-//                System.out.println("RECEIVED FRAME " + this.nodeID);
                 if (buffer[4] == 123) {
                     System.out.println("End signal received");
                 }
@@ -76,9 +75,7 @@ public class Node {
                 }
 
                 //Check if frame is an ACK response (or ACK type value that we've hijacked)
-//                System.out.println("SIZE " + frame.getSize());
                 if (!(frame.getAck() == 0b00000111 || frame.getAck() == 0b00000100)) {
-//                    System.out.println("GOT ACK");
                     switch (frame.getAck()) {
                         case 1:
                             setReaderWaitFlag(2);
@@ -86,7 +83,6 @@ public class Node {
                         case 2:
                         case 3:
                         case 4:
-//                            System.out.println("SET FLAG TO ALL GOOD " + this.nodeID );
                             setReaderWaitFlag(1);
                             break;
                         case 123:
@@ -101,16 +97,11 @@ public class Node {
                     System.out.println("Node " + this.casID + "_" + this.nodeID + ": Writing to file: " + frame.getData());
                     writer.write(frame.getData() + "\n");
 
-                    //Check if frame has been flooded, if so, no ACK necessary
+                    //If frame hasn't been flooded, send ack back
                     if (frame.getAck() != 4) {
-//                        Frame ackFrame = new Frame(this.casID, this.nodeID, 3, this.fullSrcID + ":");
-//                        byte[] bytes = Frame.encode(ackFrame);
-//                        out.write(bytes);
-
                         int dest1 = buffer[1] & 0b11110000;
-                        //System.out.println("dest1" + dest1);
                         int dest2 = buffer[1] & 0b00001111;
-                        //System.out.println("dest2" + dest2);
+
                         String s1 = String.valueOf(dest1);
                         String s2 = String.valueOf(dest2);
                         String dest = s1 + "_" + s2;
@@ -119,8 +110,6 @@ public class Node {
                         byte[] ackBytes = Frame.encode(ackFrame);
                         System.out.println("Sending ACK");
                         out.write(ackBytes);
-                    } else {
-//                        System.out.println("FLOODED FRAME");
                     }
                 }
             }
@@ -133,33 +122,28 @@ public class Node {
      * Transmits data from input file to socket and waits for acknowledgement from destination before sending next frame
      * @throws IOException if there is a stream write or file read error.
      */
-    public void transmit() throws IOException, InterruptedException {
+    public void transmit() throws IOException {
         out = new DataOutputStream(socket.getOutputStream());
         Scanner fileReader = new Scanner(new File("node" + this.casID + "_" + this.nodeID + ".txt"));
 
-        try {
-            Thread.sleep(2000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+        delay(2000);
 
         while (fileReader.hasNextLine()) {
-//            System.out.println("READER Has NEXT LINE");
             Frame frame = new Frame(this.casID, this.nodeID, 111, fileReader.nextLine());
 
             //Send message, wait for ACK, if retransmit (wait flag set to 2), then repeat up to maxTX times
             //bytes are re-encoded in case CRC error is on this end
             int maxTX = 5;
             do {
-//                System.out.println("IN TIMEOUT LOOP");
                 byte[] bytes = Frame.encode(frame);
+                System.out.println("Node " + this.casID + "_" + this.nodeID + ": Sending message: " + frame.getData());
                 out.write(bytes);
                 setReaderWaitFlag(0);
                 int timeout = 0;
                 --maxTX;
                 while (this.readerWaitFlag == 0) {
                     //System.out.println("IN 0 FLAG"); //
-                    Thread.sleep(100);
+                    delay(100);
                     if (timeout >= TIMEOUT_DELAY || maxTX <= 0) {
                         System.out.println("Node " + this.casID + "_" + this.nodeID + " Error: Timed out");
                         break;
@@ -167,16 +151,11 @@ public class Node {
                 }
                 System.out.println("Node " + this.casID + "_" + this.nodeID + ": Received ACK for message - \"" + frame.getData() + "\"");
             } while (this.readerWaitFlag == 2);
-//            System.out.println("OUT OF TIMEOUT LOOP");
         }
 
         //Send end signal
-        try {
-            Thread.sleep(200);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-        System.out.println("Node " + this.casID + "_" + this.nodeID + ": Sending end flag ---------------------------------------------");
+        delay(200);
+        System.out.println("Node " + this.casID + "_" + this.nodeID + ": Sending end flag");
         Frame closeFrame = new Frame(this.casID, this.nodeID, 123, this.fullSrcID + ":CLOSE");
         byte[] bytes = Frame.encode(closeFrame);
         out.write(bytes);
@@ -190,6 +169,18 @@ public class Node {
         //0 - wait | 1 - all good | 2 - retransmit
         this.readerWaitFlag = flag;
     }
+
+    /**
+     * Halts thread for specified amount of time in millis
+     * @param millis Amount of delay time in milliseconds
+     */
+    private static void delay(int millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
 }
 
 //FRAME FORMAT: [DST][SRC][CRC][SIZE/ACK][ACK type][data]
@@ -200,6 +191,6 @@ public class Node {
     11 Positive ACK
     100 Frame flooded, no ack necessary
     101 Firewall rules (only used by switches)
-    111 Normal message
+    111 Normal message - default
     123 End signal
  */
