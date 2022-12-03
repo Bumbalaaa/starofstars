@@ -99,7 +99,7 @@ public class Node {
                 } else {
                     //Otherwise, normal frame, write to file and send positive ACK
                     System.out.println("Node " + this.casID + "_" + this.nodeID + ": Writing to file: " + frame.getData());
-                    writer.write(frame.getData());
+                    writer.write(frame.getData() + "\n");
 
                     //Check if frame has been flooded, if so, no ACK necessary
                     if (frame.getAck() != 4) {
@@ -133,7 +133,7 @@ public class Node {
      * Transmits data from input file to socket and waits for acknowledgement from destination before sending next frame
      * @throws IOException if there is a stream write or file read error.
      */
-    public void transmit() throws IOException {
+    public void transmit() throws IOException, InterruptedException {
         out = new DataOutputStream(socket.getOutputStream());
         Scanner fileReader = new Scanner(new File("node" + this.casID + "_" + this.nodeID + ".txt"));
 
@@ -158,7 +158,8 @@ public class Node {
                 int timeout = 0;
                 --maxTX;
                 while (this.readerWaitFlag == 0) {
-                    System.out.println("IN 0 FLAG");
+                    //System.out.println("IN 0 FLAG"); //
+                    Thread.sleep(100);
                     if (timeout >= TIMEOUT_DELAY || maxTX <= 0) {
                         System.out.println("Node " + this.casID + "_" + this.nodeID + " Error: Timed out");
                         break;
