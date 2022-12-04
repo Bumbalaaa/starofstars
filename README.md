@@ -8,7 +8,7 @@ Antonio Arant
 https://github.com/Bumbalaaa/starofstars
 
 ## Run Instructions
-Java 17 is required to run this program. Place all input files formatted as `nodex_y.txt` in the same directory as the jar file. From the terminal, navigate to that directory and run the command `java -jar starofstars.jar x y` with x being the number of arm switches and y being the number of nodes per arm switch. Both numbers must be between 2 and 16. Output files will be generated in the same directory.
+Java 17 is required to run this program. Place all input files formatted as `nodex_y.txt` in the same directory as the jar file. Also in the directory place 'firewall.txt' containing firewall rules. From the terminal, navigate to that directory and run the command `java -jar starofstars.jar x y` with x being the number of arm switches and y being the number of nodes per arm switch. Both numbers must be between 2 and 8. Output files will be generated in the same directory.
 
 ## Frame Format
 The frame consists in order: source, destination, crc, size, ACK, data. Source is a single byte and is the source node of the message. Destination is the destination node and is one byte. Size is the size of the message, in bytes and is one byte long. CRC is an error checking mechanism, and is one byte long. The ACK is used to communicate needed acknowlegement info, such as if a frame needs to be re-transmitted, if there was a CRC error, if a frame had been firewalled, or if a frame had been sucessfully transmitted. It also is used during the shutdown phase, to let nodes and switches know to shutdown. Data is the meat of the frame. It is the actual data communicated, and can be 255 bytes long.
